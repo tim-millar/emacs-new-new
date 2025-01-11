@@ -1,0 +1,10 @@
+;;; -*- lisp-data -*-
+(("~/.emacs.vertico/")
+ ("~/code/palace/running-tings/")
+ ("~/code/palace/two-merch-two-tool/")
+ ("/Users/timmillar/code/palace/palace-wordpress/")
+ ("/Users/timmillar/code/palace/two-merch-two-tool/")
+ ("/Users/timmillar/code/palace/aws-queue-web/")
+ ("/Users/timmillar/code/palace/running-tings/")
+ ("/Users/timmillar/code/palace/aws-running-tings/")
+ ("/Users/timmillar/code/palace/aws-worker-scaling-service/"))

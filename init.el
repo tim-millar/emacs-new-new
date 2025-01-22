@@ -8,10 +8,10 @@
 
 ;; Profile emacs startup
 (add-hook 'emacs-startup-hook
-          (lambda ()
-            (message "*** Emacs loaded in %s seconds with %d garbage collections."
-                     (emacs-init-time "%.2f")
-                     gcs-done)))
+	  (lambda ()
+	    (message "*** Emacs loaded in %s seconds with %d garbage collections."
+		     (emacs-init-time "%.2f")
+		     gcs-done)))
 
 (setq inhibit-splash-screen t)
 
@@ -24,7 +24,6 @@
 (global-hl-line-mode t)
 (winner-mode t)
 
-;; (setq default-frame-alist '((font . "Fira Code-8")))
 (set-face-attribute 'default nil :font "Fira Code-14")
 
 ;; set package archives
@@ -46,6 +45,8 @@
   (package-refresh-contents)
   (package-install 'use-package))
 
+(setq use-package-always-ensure t)
+
 (require 'json)
 
 (use-package exec-path-from-shell
@@ -63,13 +64,13 @@
   :ensure t
   :init
   (setq general-override-states '(insert
-                                  emacs
-                                  hybrid
-                                  normal
-                                  visual
-                                  motion
-                                  operator
-                                  replace))
+				  emacs
+				  hybrid
+				  normal
+				  visual
+				  motion
+				  operator
+				  replace))
   :config
   (general-create-definer tyrant-def
    :states '(normal visual insert emacs)
@@ -100,7 +101,8 @@
    "b-" 'split-window-vertically
    "b/" 'split-window-horizontally
    "bd" 'dired-jump
-   "by" 'show-buffer-file-name
+   "br" 'my/rubocop-autocorrect
+   ;; "by" 'show-buffer-file-name
 
    "f" '(:ignore t :which-key "files")
    "ff" 'find-file
@@ -135,7 +137,7 @@
   ;;  ;; "." 'evilnc-copy-and-comment-operator
 
   ;;  ;; "g" '(:ignore t :which-key "git")
-  ;;  ;; 	 "gf" 'magit-log-buffer-file
+  ;;  ;;	 "gf" 'magit-log-buffer-file
   ;;  ;; "gs" 'magit-status
   ;;  ;; "gg" 'counsel-git-grep
   ;;  ;; "gt" 'git-timemachine-toggle
@@ -235,7 +237,7 @@
   (define-key evil-insert-state-map (kbd "C-g") 'evil-normal-state)
   (evil-set-initial-state 'eshell-mode 'emacs)
   (evil-set-initial-state 'inf-ruby-mode 'emacs)
-  (evil-set-initial-state 'commint-mode 'normal)
+  ;; (evil-set-initial-state 'commint-mode 'normal)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'term-mode 'emacs)
   (evil-set-initial-state 'erc-mode 'emacs)
@@ -254,7 +256,10 @@
   :ensure t
   :after evil
   :config
-  (evil-collection-init))
+  (evil-collection-init)
+  (with-eval-after-load 'compilation
+    (evil-define-key 'normal compilation-mode-map "q" 'quit-window))
+  )
 
 ;; ==============================
 ;; vertico, consult etc
@@ -268,17 +273,17 @@
 
   ;; Configure Vertico behavior
   (setq vertico-resize t          ; Grow and shrink minibuffer
-        vertico-cycle t)          ; Enable cycling through candidates
+	vertico-cycle t)          ; Enable cycling through candidates
 
   ;; Workaround for `tramp` hostname completions
   (defun kb/basic-remote-try-completion (string table pred point)
     (and (vertico--remote-p string)
-         (completion-basic-try-completion string table pred point)))
+	 (completion-basic-try-completion string table pred point)))
   (defun kb/basic-remote-all-completions (string table pred point)
     (and (vertico--remote-p string)
-         (completion-basic-all-completions string table pred point)))
+	 (completion-basic-all-completions string table pred point)))
   (add-to-list 'completion-styles-alist
-               '(basic-remote kb/basic-remote-try-completion kb/basic-remote-all-completions nil))
+	       '(basic-remote kb/basic-remote-try-completion kb/basic-remote-all-completions nil))
 
   :bind
   (("C-c c" . vertico-repeat)
@@ -302,11 +307,11 @@
   ;; Enable multiform mode for flexible layouts
   (vertico-multiform-mode)
   (setq vertico-multiform-categories
-        '((consult-grep buffer)
-          (org-roam-node reverse indexed))
-        vertico-multiform-commands
-        '((consult-yank-pop indexed)
-          (org-refile grid reverse)))
+	'((consult-grep buffer)
+	  (org-roam-node reverse indexed))
+	vertico-multiform-commands
+	'((consult-yank-pop indexed)
+	  (org-refile grid reverse)))
   )
 
 
@@ -315,9 +320,9 @@
   :ensure nil  ; Part of vertico, no need to install separately
   :after vertico
   :bind (:map vertico-map
-              ("<backspace>" . vertico-directory-delete-char)
-              ("C-w" . vertico-directory-delete-word)
-              ("RET" . vertico-directory-enter))
+	      ("<backspace>" . vertico-directory-delete-char)
+	      ("C-w" . vertico-directory-delete-word)
+	      ("RET" . vertico-directory-enter))
   :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
 
 ;; Persist history over Emacs restarts. Vertico sorts by history position.
@@ -334,16 +339,16 @@
   ;; We display [CRM<separator>], e.g., [CRM,] if the separator is a comma.
   (defun crm-indicator (args)
     (cons (format "[CRM%s] %s"
-                  (replace-regexp-in-string
-                   "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
-                   crm-separator)
-                  (car args))
-          (cdr args)))
+		  (replace-regexp-in-string
+		   "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+		   crm-separator)
+		  (car args))
+	  (cdr args)))
   (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
 
   ;; Do not allow the cursor in the minibuffer prompt
   (setq minibuffer-prompt-properties
-        '(read-only t cursor-intangible t face minibuffer-prompt))
+	'(read-only t cursor-intangible t face minibuffer-prompt))
   (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
   ;; Emacs 28: Hide commands in M-x which do not work in the current mode.
@@ -362,8 +367,8 @@
   ;; (setq orderless-style-dispatchers '(+orderless-consult-dispatch orderless-affix-dispatch)
   ;;       orderless-component-separator #'orderless-escapable-split-on-space)
   (setq completion-styles '(orderless basic)
-        completion-category-defaults nil
-        completion-category-overrides '((file (styles partial-completion))))
+	completion-category-defaults nil
+	completion-category-overrides '((file (styles partial-completion))))
 
   (defun orderless--strict-*-initialism (component &optional anchored)
     "Match a COMPONENT as a strict initialism, optionally ANCHORED.
@@ -377,11 +382,11 @@ the first word of the candidate.  If ANCHORED is `both' require
 that the first and last initials appear in the first and last
 words of the candidate, respectively."
     (orderless--separated-by
-        '(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)))
+	'(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)))
       (cl-loop for char across component collect `(seq word-start ,char))
       (when anchored '(seq (group buffer-start) (zero-or-more (not alpha))))
       (when (eq anchored 'both)
-        '(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)) eol))))
+	'(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)) eol))))
 
   (defun orderless-strict-initialism (component)
     "Match a COMPONENT as a strict initialism.
@@ -437,57 +442,57 @@ parses its input."
   :ensure t
   ;; Replace bindings. Lazily loaded due by `use-package'.
   :bind (;; C-c bindings in `mode-specific-map'
-         ("C-c M-x" . consult-mode-command)
-         ("C-c h" . consult-history)
-         ("C-c k" . consult-kmacro)
-         ("C-c m" . consult-man)
-         ("C-c i" . consult-info)
-         ([remap Info-search] . consult-info)
-         ;; C-x bindings in `ctl-x-map'
-         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
-         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
-         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
-         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
-         ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
-         ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
-         ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-         ;; Custom M-# bindings for fast register access
-         ("M-#" . consult-register-load)
-         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
-         ("C-M-#" . consult-register)
-         ;; Other custom bindings
-         ("M-y" . consult-yank-pop)                ;; orig. yank-pop
-         ;; M-g bindings in `goto-map'
-         ("M-g e" . consult-compile-error)
-         ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
-         ("M-g g" . consult-goto-line)             ;; orig. goto-line
-         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
-         ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
-         ("M-g m" . consult-mark)
-         ("M-g k" . consult-global-mark)
-         ("M-g i" . consult-imenu)
-         ("M-g I" . consult-imenu-multi)
-         ;; M-s bindings in `search-map'
-         ("M-s d" . consult-find)                  ;; Alternative: consult-fd
-         ("M-s c" . consult-locate)
-         ("M-s G" . consult-grep)
-         ("M-s g" . consult-git-grep)
-         ("M-s r" . consult-ripgrep)
-         ("M-s l" . consult-line)
-         ("M-s L" . consult-line-multi)
-         ("M-s k" . consult-keep-lines)
-         ("M-s u" . consult-focus-lines)
-         ;; Isearch integration
-         ("M-s e" . consult-isearch-history)
-         :map isearch-mode-map
-         ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
-         ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
-         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-         ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
-         ;; Minibuffer history
-         :map minibuffer-local-map
-         ("M-s" . consult-history)                 ;; orig. next-matching-history-element
-         ("M-r" . consult-history))                ;; orig. previous-matching-history-element
+	 ("C-c M-x" . consult-mode-command)
+	 ("C-c h" . consult-history)
+	 ("C-c k" . consult-kmacro)
+	 ("C-c m" . consult-man)
+	 ("C-c i" . consult-info)
+	 ([remap Info-search] . consult-info)
+	 ;; C-x bindings in `ctl-x-map'
+	 ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+	 ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+	 ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+	 ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+	 ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
+	 ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+	 ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
+	 ;; Custom M-# bindings for fast register access
+	 ("M-#" . consult-register-load)
+	 ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+	 ("C-M-#" . consult-register)
+	 ;; Other custom bindings
+	 ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+	 ;; M-g bindings in `goto-map'
+	 ("M-g e" . consult-compile-error)
+	 ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+	 ("M-g g" . consult-goto-line)             ;; orig. goto-line
+	 ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+	 ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+	 ("M-g m" . consult-mark)
+	 ("M-g k" . consult-global-mark)
+	 ("M-g i" . consult-imenu)
+	 ("M-g I" . consult-imenu-multi)
+	 ;; M-s bindings in `search-map'
+	 ("M-s d" . consult-find)                  ;; Alternative: consult-fd
+	 ("M-s c" . consult-locate)
+	 ("M-s G" . consult-grep)
+	 ("M-s g" . consult-git-grep)
+	 ("M-s r" . consult-ripgrep)
+	 ("M-s l" . consult-line)
+	 ("M-s L" . consult-line-multi)
+	 ("M-s k" . consult-keep-lines)
+	 ("M-s u" . consult-focus-lines)
+	 ;; Isearch integration
+	 ("M-s e" . consult-isearch-history)
+	 :map isearch-mode-map
+	 ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+	 ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+	 ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+	 ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+	 ;; Minibuffer history
+	 :map minibuffer-local-map
+	 ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+	 ("M-r" . consult-history))                ;; orig. previous-matching-history-element
 
   ;; Enable automatic preview at point in the *Completions* buffer. This is
   ;; relevant when you use the default completion UI.
@@ -500,7 +505,7 @@ parses its input."
   ;; preview for `consult-register', `consult-register-load',
   ;; `consult-register-store' and the Emacs built-ins.
   (setq register-preview-delay 0.5
-        register-preview-function #'consult-register-format)
+	register-preview-function #'consult-register-format)
 
   ;; Optionally tweak the register preview window.
   ;; This adds thin lines, sorting and hides the mode line of the window.
@@ -508,7 +513,7 @@ parses its input."
 
   ;; Use Consult to select xref locations with preview
   (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
+	xref-show-definitions-function #'consult-xref)
 
   ;; Configure other variables and modes in the :config section,
   ;; after lazily loading the package.
@@ -562,7 +567,7 @@ parses its input."
   ;; available in the *Completions* buffer, add it to the
   ;; `completion-list-mode-map'.
   :bind (:map minibuffer-local-map
-         ("M-A" . marginalia-cycle))
+	 ("M-A" . marginalia-cycle))
 
   ;; The :init section is always executed.
   :init
@@ -605,15 +610,14 @@ parses its input."
 
   ;; Hide the mode line of the Embark live/completions buffers
   (add-to-list 'display-buffer-alist
-               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
-                 nil
-                 (window-parameters (mode-line-format . none)))))
-
-(use-package cape
-  :ensure t)
+	       '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+		 nil
+		 (window-parameters (mode-line-format . none)))))
 
 (use-package corfu
   :ensure t
+  :init
+  (global-corfu-mode)
   :general
   (:keymaps 'corfu-map
    :states 'insert
@@ -621,12 +625,35 @@ parses its input."
    "C-k" #'corfu-previous
    "<escape>" #'corfu-quit
    "<return>" #'corfu-insert
+   "<TAB>" #'corfu-complete
    "C-i" #'corfu-quick-insert
    "M-d" #'corfu-info-documentation
    "M-l" #'corfu-info-location)
   :config
-  (global-corfu-mode 1)
+  (setq corfu-auto t
+	corfu-auto-prefix 1
+	corfu-count 20)
   )
+
+;; Install and configure cape
+(use-package cape
+  :after corfu
+  :config
+  ;; Add desired cape sources
+  (add-to-list 'completion-at-point-functions #'cape-dabbrev)
+  (add-to-list 'completion-at-point-functions #'cape-file)
+  (add-to-list 'completion-at-point-functions #'cape-keyword)
+  (add-to-list 'completion-at-point-functions #'cape-symbol)
+  ;; Additional cape sources can be added here
+  )
+
+;; Optional: Add corfu-popupinfo
+(use-package corfu-popupinfo
+  :ensure nil
+  :after corfu
+  :hook (corfu-mode . corfu-popupinfo-mode)
+  :config
+  (setq corfu-popupinfo-delay 0.5))
 
 ;; ==============================
 ;; Dired
@@ -665,8 +692,6 @@ parses its input."
   (evil-make-overriding-map git-timemachine-mode-map 'normal)
   (add-hook 'git-timemachine-mode-hook #'evil-normalize-keymaps))
 
-
-
 ;; ==============================
 ;; Writing
 ;; ==============================
@@ -675,35 +700,134 @@ parses its input."
   :ensure t)
 
 ;; ==============================
-;; Software Development / Programming
+;; Software Development / Programming General
 ;; ==============================
 
-(use-package rvm
-  :ensure t
+(use-package add-node-modules-path
   :config
-  (rvm-use-default))
+  (add-hook 'js-mode-hook 'add-node-modules-path))
+
+(use-package flycheck
+  :after add-node-modules-path
+  :init
+  (setq flycheck-ruby-rubocop-executable "docker compose exec web bundle exec rubocop")
+  (global-flycheck-mode))
+
+(use-package direnv
+  :config
+  (direnv-mode))
+
+;; lsp mode
+;; lsp-mode for language server integration
+(use-package lsp-mode
+  :hook ((ruby-mode . lsp)
+	 (python-mode . lsp)
+	 (js-mode . lsp))
+  :commands lsp lsp-deferred
+  :init
+  ;; Enable LSP features
+  (setq lsp-keymap-prefix "C-c l")
+  (setq lsp-enable-file-watchers nil) ;; Optional: Disable file watchers for large projects
+  :config
+  (add-hook 'lsp-mode-hook #'lsp-enable-which-key-integration)
+  (setq read-process-output-max (* 1024 1024)) ;; 1mb
+  ;; Configure Ruby language server
+  (setq lsp-solargraph-use-bundler nil
+	lsp-solargraph-diagnostics t)
+  (setq lsp-completion-provider :none
+	lsp-idle-delay 0.0
+	lsp-enable-snippet t)
+  (setq lsp-prefer-flymake nil)
+  (setq lsp-solargraph-server-command '("docker" "compose" "exec" "-T" "web" "bundle" "exec" "solargraph" "stdio")))
+
+;; Optional: Use `lsp-ui` for better UI integrations
+(use-package lsp-ui
+  :ensure t
+  :commands lsp-ui-mode
+  :config
+  (setq lsp-ui-sideline-enable t
+	lsp-ui-peek-enable t
+	lsp-ui-doc-enable t))
+
+;; Install and configure Copilot
+(use-package copilot
+  :hook (prog-mode . copilot-mode)
+  :bind (("C-TAB" . copilot-accept-completion)  ;; Bind Ctrl+Tab to accept Copilot suggestions
+	 ("C-<tab>" . copilot-accept-completion))
+  :config
+  (setq copilot-no-tab-map t)  ;; Prevent Copilot from overriding TAB
+
+  ;; Disable Copilot in ruby-mode to prevent conflicts with Solargraph
+  (add-hook 'ruby-mode-hook (lambda () (copilot-mode -1))))
+
+(use-package dumb-jump
+  :ensure t
+  :defer t
+  :init
+  (setq dumb-jump-aggressive nil)
+  (setq xref-show-definitions-function #'xref-show-definitions-completing-read)
+  (setq dumb-jump-force-searcher 'rg)
+  ;; (setq dump-jump-debug t)
+  (setq dumb-jump-disable-obsolete-warnings t)
+  (setq dumb-jump-selector 'completing-read)
+  :config
+  ;; (add-hook 'xref-backend-functions #'dumb-jump-xref-activate)
+  (add-to-list 'xref-backend-functions 'dumb-jump-xref-activate)
+  (dumb-jump-mode))
+
+;; eglot doesn't work!
+;; ;; Install and configure eglot
+;; (use-package eglot
+;;   :hook
+;;   (ruby-mode . eglot-ensure)
+;;   :config
+;;   (setq eglot-inlay-hints-mode t)
+;;   ;; Using solargraph directly
+;;   ;; (add-to-list 'eglot-server-programs '((ruby-mode) . ("solargraph" "socket" "--port" "0")))
+;;   ;; (add-to-list 'eglot-server-programs
+;;   ;;		       '(ruby-mode . ("/Users/timmillar/code/palace/running-tings/debug.sh")))
+;;   (add-to-list 'eglot-server-programs
+;;	       '(ruby-mode . ("/Users/timmillar/.gem/ruby/2.7.5/bin/solargraph" "socket" "--port" "0")))
+
+;;   (setq eglot-connect-timeout 60)
+
+;;   ;; Optional: Increase eglot's logging level for more detailed logs
+;;   ;; (setq eglot-events-buffer-size 5000)
+;; )
+
+;; (use-package flycheck-eglot
+;;   :ensure t
+;;   :after (eglot flycheck)
+;;   :config
+;;   (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-setup))
+
+;; ==============================
+;; Software Development / Programming Language Specific
+;; ==============================
+
+(use-package ruby-mode
+  :interpreter "ruby"
+  :mode
+  ("\\(?:\\.rb\\|ru\\|rake\\|thor\\|jbuilder\\|gemspec\\|podspec\\|/\\(?:Gem\\|Rake\\|Cap\\|Thor\\|Vagrant\\|Guard\\|Pod\\)file\\)\\'" . ruby-mode))
 
 (use-package terraform-mode
   :ensure t
   :custom (terraform-format-on-save t))
 
-(use-package add-node-modules-path
-  :ensure t
-  :config
-  (add-hook 'js-mode-hook 'add-node-modules-path))
-
-(use-package flycheck
-  :ensure t
-  :after add-node-modules-path
-  :init
-  (setq flycheck-ruby-rubocop-executable "docker compose exec web bundle")
-  (setq flycheck-ruby-rubocop-args '("exec" "rubocop"))
-  (global-flycheck-mode))
-
 (use-package php-mode
   :ensure t)
 
+(use-package dockerfile-mode
+  :ensure t)
+
+(use-package yaml-mode
+  :ensure t
+  :init
+  (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-mode)))
+
+;; ==============================
 ;; Stuff
+;; ==============================
 
 (use-package ansi-color
   :ensure nil)
@@ -716,18 +840,64 @@ parses its input."
 (defun my/compile-in-environments-directory ()
   (interactive)
   (let ((default-directory
-          (if (string= (file-name-extension buffer-file-name) "tf")
-              (concat default-directory "./aws/terraform/environments")
-            default-directory))))
+	  (if (string= (file-name-extension buffer-file-name) "tf")
+	      (concat default-directory "./aws/terraform/environments")
+	    default-directory))))
   (call-interactively #'compile))
 
-(use-package dockerfile-mode
-  :ensure t)
+(defun my/rubocop-autocorrect ()
+  "Run Rubocop autocorrect on the current buffer, handling containerized projects.
 
-(use-package yaml-mode
-  :ensure t
-  :init
-  (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-mode)))
+If the project contains a docker-compose.yml or docker-compose.yaml file and defines a service named 'web',
+Rubocop will be run inside the 'web' container using Docker Compose.
+Otherwise, Rubocop will be run locally, either via Bundler if available,
+or directly if not."
+  (interactive)
+  (when (eq major-mode 'ruby-mode)
+    (save-buffer)  ;; Ensure buffer is saved before running Rubocop
+    (let* (
+	   ;; Define the names of docker-compose files to look for
+	   (docker-compose-files '("docker-compose.yml" "docker-compose.yaml"))
+
+	   ;; Find the project root by locating a docker-compose file or Gemfile
+	   (project-root
+	    (or
+	     (locate-dominating-file buffer-file-name "docker-compose.yml")
+	     (locate-dominating-file buffer-file-name "docker-compose.yaml")
+	     (locate-dominating-file buffer-file-name "Gemfile")
+	     default-directory))
+
+	   ;; Set the default directory to the project root
+	   (default-directory (or project-root default-directory))
+
+	   ;; Get the absolute path of the current file
+	   (file (buffer-file-name))
+
+	   ;; Get the path of the current file relative to the project root
+	   (relative-file (file-relative-name file default-directory))
+
+	   ;; Determine the Rubocop command based on the project setup
+	   (rubocop-command
+	    (cond
+	     ;; If a docker-compose file is present, assume containerized project
+	     ((or
+	       (file-exists-p (expand-file-name "docker-compose.yml" project-root))
+	       (file-exists-p (expand-file-name "docker-compose.yaml" project-root)))
+	      ;; Construct the Docker Compose command to run Rubocop inside the 'web' container
+	      (format "docker compose exec web bundle exec rubocop -A %s"
+		      (shell-quote-argument relative-file)))
+
+	     ;; Else if Bundler is available, use it to run Rubocop
+	     ((executable-find "bundle")
+	      (format "bundle exec rubocop -A %s" (shell-quote-argument relative-file)))
+
+	     ;; Else, run Rubocop directly
+	     (t
+	      (format "rubocop -A %s" (shell-quote-argument relative-file))))))
+      ;; Start the Rubocop process in a compilation buffer named "*Rubocop Autocorrect*"
+      (compilation-start rubocop-command
+			 'compilation-mode
+			 (lambda (mode-name) "*Rubocop Autocorrect*")))))
 
 ;; ==============================
 ;; Emacs Auto-gen
@@ -739,7 +909,7 @@ parses its input."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(yaml-mode dockerfile-mode add-node-modules-path all-the-icons-completion all-the-icons-dired cape consult corfu doom-modeline doom-themes embark embark-consult evil-collection evil-escape exec-path-from-shell flycheck general git-timemachine magit marginalia orderless php-mode rvm terraform-mode vertico which-key writeroom-mode)))
+   '(dumb-jump lsp-mode eglot flycheck-eglot direnv yaml-mode dockerfile-mode add-node-modules-path all-the-icons-completion all-the-icons-dired cape consult corfu doom-modeline doom-themes embark embark-consult evil-collection evil-escape exec-path-from-shell flycheck general git-timemachine magit marginalia orderless php-mode rvm terraform-mode vertico which-key writeroom-mode)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

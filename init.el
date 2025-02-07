@@ -174,14 +174,12 @@
 ;; ==============================
 
 (use-package doom-themes
-  :ensure t
   :config
   (load-theme 'doom-nord t)
   (doom-themes-visual-bell-config)
   (doom-themes-org-config))
 
 (use-package doom-modeline
-  :ensure t
   :defer t
   :init
   (doom-modeline-mode 1)
@@ -190,25 +188,21 @@
   (setq doom-modeline-buffer-file-name-style 'relative-to-project))
 
 (use-package all-the-icons
-  :ensure t
   :init
   (setq all-the-icons-color-icons t))
 
 (use-package all-the-icons-dired
-  :ensure t
   :diminish all-the-icons-dired
   :config
   (add-hook 'dired-mode-hook 'all-the-icons-dired-mode))
 
 (use-package all-the-icons-completion
-  :ensure t
   :after (all-the-icons marginalia)
   :config
   (add-hook 'marginalia-mode-hook #'all-the-icons-completion-marginalia-setup)
   (all-the-icons-completion-mode))
 
 (use-package which-key
-  :ensure t
   :diminish which-key-mode
   :init
   (which-key-mode)
@@ -224,7 +218,6 @@
 ;; ==============================
 
 (use-package evil
-  :ensure t
   :init
   (setq evil-want-keybinding nil)
   (setq evil-disable-insert-state-bindings t)
@@ -247,13 +240,11 @@
   (evil-mode 1))
 
 (use-package evil-escape
-  :ensure t
   :diminish evil-escape-mode
   :config
   (evil-escape-mode 1))
 
 (use-package evil-collection
-  :ensure t
   :after evil
   :config
   (evil-collection-init)
@@ -267,7 +258,6 @@
 
 ;; Enable vertico
 (use-package vertico
-  :ensure t
   :init
   (vertico-mode)
 
@@ -317,7 +307,7 @@
 
 ;; Use vertico-directory for file navigation
 (use-package vertico-directory
-  :ensure nil  ; Part of vertico, no need to install separately
+  :straight nil  ; Part of vertico, no need to install separately
   :after vertico
   :bind (:map vertico-map
 	      ("<backspace>" . vertico-directory-delete-char)
@@ -327,13 +317,11 @@
 
 ;; Persist history over Emacs restarts. Vertico sorts by history position.
 (use-package savehist
-  :ensure t
   :init
   (savehist-mode))
 
 ;; A few more useful configurations...
 (use-package emacs
-  :ensure t
   :init
   ;; Add prompt indicator to `completing-read-multiple'.
   ;; We display [CRM<separator>], e.g., [CRM,] if the separator is a comma.
@@ -361,7 +349,6 @@
 
 ;; Optionally use the `orderless' completion style.
 (use-package orderless
-  :ensure t
   :init
   ;; Configure a custom style dispatcher (see the Consult wiki)
   ;; (setq orderless-style-dispatchers '(+orderless-consult-dispatch orderless-affix-dispatch)
@@ -439,7 +426,6 @@ parses its input."
 
 ;; Example configuration for Consult
 (use-package consult
-  :ensure t
   ;; Replace bindings. Lazily loaded due by `use-package'.
   :bind (;; C-c bindings in `mode-specific-map'
 	 ("C-c M-x" . consult-mode-command)
@@ -579,14 +565,11 @@ parses its input."
 
 ;; Consult users will also want the embark-consult package.
 (use-package embark-consult
-  :ensure t ; only need to install it, embark loads it after consult if found
   :after (embark consult)
   :hook
   (embark-collect-mode . consult-preview-at-point-mode))
 
 (use-package embark
-  :ensure t
-
   :bind
   (("C-," . embark-act)         ;; pick some comfortable binding
    ("C-;" . embark-dwim)        ;; good alternative: M-.
@@ -649,7 +632,7 @@ parses its input."
 
 ;; Optional: Add corfu-popupinfo
 (use-package corfu-popupinfo
-  :ensure nil
+  :straight nil
   :after corfu
   :hook (corfu-mode . corfu-popupinfo-mode)
   :config
@@ -660,7 +643,7 @@ parses its input."
 ;; ==============================
 
 (use-package dired
-  :ensure nil
+  :straight nil
   :config
   (setq dired-recursive-copies 'always
 	dired-recursive-deletes 'top
@@ -697,7 +680,7 @@ parses its input."
 ;; ==============================
 
 (use-package writeroom-mode
-  :ensure t)
+  :defer t)
 
 ;; ==============================
 ;; Software Development / Programming General
@@ -742,7 +725,6 @@ parses its input."
 
 ;; Optional: Use `lsp-ui` for better UI integrations
 (use-package lsp-ui
-  :ensure t
   :commands lsp-ui-mode
   :config
   (setq lsp-ui-sideline-enable t
@@ -761,8 +743,7 @@ parses its input."
   (add-hook 'ruby-mode-hook (lambda () (copilot-mode -1))))
 
 (use-package dumb-jump
-  :ensure t
-  :defer t
+  :commands (dumb-jump-go)
   :init
   (setq dumb-jump-aggressive nil)
   (setq xref-show-definitions-function #'xref-show-definitions-completing-read)
@@ -796,7 +777,6 @@ parses its input."
 ;; )
 
 ;; (use-package flycheck-eglot
-;;   :ensure t
 ;;   :after (eglot flycheck)
 ;;   :config
 ;;   (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-setup))
@@ -810,27 +790,32 @@ parses its input."
   :mode
   ("\\(?:\\.rb\\|ru\\|rake\\|thor\\|jbuilder\\|gemspec\\|podspec\\|/\\(?:Gem\\|Rake\\|Cap\\|Thor\\|Vagrant\\|Guard\\|Pod\\)file\\)\\'" . ruby-mode))
 
+(use-package inf-ruby
+  :hook ((ruby-mode . inf-ruby-minor-mode)
+         (compilation-filter . inf-ruby-auto-enter-and-focus)))
+
 (use-package terraform-mode
-  :ensure t
+  :mode ("\\.tf\\'" "\\.tfvars\\'")
   :custom (terraform-format-on-save t))
 
 (use-package php-mode
-  :ensure t)
+  :mode "\\.php\\'")
 
-(use-package dockerfile-mode
-  :ensure t)
+(use-package dockerfile-mode)
 
 (use-package yaml-mode
-  :ensure t
+  :mode "\\.ya?ml\\'")
+
+(use-package typescript-mode
+  :mode "\\.tsx?\\'"
   :init
-  (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-mode)))
+  (setq typescript-indent-level 2))
 
 ;; ==============================
 ;; Stuff
 ;; ==============================
 
-(use-package ansi-color
-  :ensure nil)
+(use-package ansi-color)
 
 (defun my/ansi-colorize-buffer ()
   (let ((buffer-read-only nil))

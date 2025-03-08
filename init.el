@@ -26,42 +26,107 @@
 
 (set-face-attribute 'default nil :font "Fira Code-14")
 
+(setq column-number-mode t
+      sentence-end-double-space nil
+      fill-column 80
+      ispell-program-name "aspell")
+
+(defalias 'list-buffers 'ibuffer)
+
+(defun tm/setup-line-numbers ()
+  "Setup line numbers."
+  (progn
+    (display-line-numbers-mode t)
+    (setq display-line-numbers-type t
+          display-line-numbers-current-absolute t
+          display-line-numbers-width 3)))
+
+(add-hook 'prog-mode-hook 'tm/setup-line-numbers)
+
+;; file backups
+(setq backup-directory-alist
+      '(("." . "~/.emacs.d/backups"))
+      auto-save-file-name-transforms
+      `((".*" "~/.emacs.d/auto-save-list/" t))
+      backup-by-copying t)
+
 ;; set package archives
 ;; ==============================
 
+;; (setq package-enable-at-startup nil)
+
+;; (setq package-archives '(
+;; 			 ("melpa" . "https://melpa.org/packages/")
+;; 			 ("melpa-stable" . "https://stable.melpa.org/packages/")
+;; 			 ("gnu" . "https://elpa.gnu.org/packages/")
+;; 			 ("org" . "https://orgmode.org/elpa/")
+;; 			 )
+;;       package-archive-priorities '(("melpa" . 1)))
+
+;; (package-initialize)
+
+;; (unless (package-installed-p 'use-package)
+;;   (package-refresh-contents)
+;;   (package-install 'use-package))
+
+;; (setq use-package-always-ensure t)
+
+;; Bootstrap straight.el
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name
+        "straight/repos/straight.el/bootstrap.el"
+        (or (bound-and-true-p straight-base-dir)
+            user-emacs-directory)))
+      (bootstrap-version 7))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
 (setq package-enable-at-startup nil)
-
-(setq package-archives '(
-			 ("melpa" . "https://melpa.org/packages/")
-			 ("melpa-stable" . "https://stable.melpa.org/packages/")
-			 ("gnu" . "https://elpa.gnu.org/packages/")
-			 ("org" . "https://orgmode.org/elpa/")
-			 )
-      package-archive-priorities '(("melpa" . 1)))
-
-(package-initialize)
-
-(unless (package-installed-p 'use-package)
-  (package-refresh-contents)
-  (package-install 'use-package))
-
-(setq use-package-always-ensure t)
 
 (require 'json)
 
+;; Use straight.el by default in use-package
+(setq straight-use-package-by-default t)
+
+;; Install use-package via straight.el
+(straight-use-package 'use-package)
+
+(setq straight-cache-autoloads t)
+
 (use-package exec-path-from-shell
-  :ensure t
   :config
   (dolist (var '("~/.rvm" "~/.nvm" "~/.pyenv"))
     (add-to-list 'exec-path-from-shell-variables var))
   (when (memq window-system '(mac ns x))
     (exec-path-from-shell-initialize)))
 
+(setq auth-sources '("~/.authinfo"))
+
+;; General setup
+;; ==============================
+
+(fset 'yes-or-no-p 'y-or-n-p)
+(add-hook 'kill-emacs-query-functions
+	  (lambda () (y-or-n-p "Do you really want to exit Emacs? "))
+	  'append)
+
+(setq byte-compile-warnings '(not docstrings))
+
+(use-package diminish
+  :hook (after-init . (lambda ()
+                        (mapc #'diminish minor-mode-list))))
+
 ;; Set general keybindings
 ;; ==============================
 
 (use-package general
-  :ensure t
   :init
   (setq general-override-states '(insert
 				  emacs
@@ -96,6 +161,7 @@
    "bb" 'consult-buffer
    "bi" 'ibuffer
    "bk" 'kill-this-buffer
+   "bK" 'kill-buffer-and-window
    "bs" 'save-buffer
    "bS" 'save-some-buffer
    "b-" 'split-window-vertically
@@ -103,6 +169,8 @@
    "bd" 'dired-jump
    "br" 'my/rubocop-autocorrect
    ;; "by" 'show-buffer-file-name
+   "be" 'my/eshell-here
+   "bf" 'fill-region
 
    "f" '(:ignore t :which-key "files")
    "ff" 'find-file
@@ -120,54 +188,31 @@
    "ai" 'cape-ispell
    "al" 'cape-line
    "aw" 'cape-dict
-   "a\\" '\cape-tex
-   "a_" 'ca_pe-tex
    "a^" 'cape-tex
    "a&" 'cape-sgml
    "ar" 'cape-rfc1345
+
+   "p" '(:keymap project-prefix-map :which-key "project")
+
+   "gg" 'dumb-jump-go
+   "gG" 'dumb-jump-back
+
+   "oa" '(org-agenda :which-key "org-agenda")
+   "oc" '(org-capture :which-key "org-capture")
+   "on" '(my/org-ql-ai-notes :which-key "org-ql-ai-notes")
+   "oN" '(my/org-ql-general-notes :which-key "org-ql-general-notes")
+   "oj" '(my/org-ql-journal-entries :which-key "org-ql-journal-entries")
+   "ot" '(my/org-ql-outstanding-todos :which-key "org-ql-outstanding-todos")
   )
 
-  ;; (general-define-key
-  ;;  :keymaps 'override
-  ;;  :states '(normal visual insert emacs)
-  ;;  :prefix "SPC"
-  ;;  :non-normal-prefix "C-SPC"
-
-  ;;  ;; "," 'evilnc-comment-operator
-  ;;  ;; "." 'evilnc-copy-and-comment-operator
-
-  ;;  ;; "g" '(:ignore t :which-key "git")
-  ;;  ;;	 "gf" 'magit-log-buffer-file
-  ;;  ;; "gs" 'magit-status
-  ;;  ;; "gg" 'counsel-git-grep
-  ;;  ;; "gt" 'git-timemachine-toggle
-  ;;  ;; "gb" 'magit-blame
-
-  ;;  ;; "j"  '(:ignore t :which-key "jump")
-  ;;  ;; "jj" 'dumb-jump-go
-  ;;  ;; "jx" 'xref-find-definitions
-  ;;  ;; "jf" 'lsp-ivy-workspace-symbol
-
-  ;;  ;; "p" '(projectile-command-map :which-key "projectile")
-  ;;  ;; "r" '(projectile-rails-command-map :which-key "projectile-rails")
-  ;;  ;; "l" '(lsp-mode-map :which-key "lsp-mode") ;; why does this not work?
-
-  ;;  ;; "xi" 'tm/iterm-focus
-  ;;  ;; "xd" 'tm/iterm-goto-filedir-or-home
-  ;;  ;; "xx" 'eshell-here
-  ;;  ;; "xu" 'sp-unwrap-sexp
-  ;;  ;; "xc" 'org-capture
-  ;;  ;; "xa" 'org-agenda
-  ;;  ;; "xl" 'org-store-link
-  ;;  ;; "xs" 'scratch
-
-  ;;  ;; "xr" '(:ignore t :which-key "ruby")
-  ;;  ;; "xri" 'bundle-install
-  ;;  ;; "xrr" '(rspec-mode-keymap :which-key "rspec")
-  ;;  ;; "xrb" 'ruby-toggle-block
-  ;;  ;; "xrs" 'ruby-toggle-string-quotes
-  ;;  ;; "xry" 'ruby-tools-to-symbol
-  ;;  )
+  (general-define-key
+   :keymaps 'tab-prefix-map
+   "t" 'tab-switch
+   "k" 'tab-bar-close-tab
+   "x" 'other-tab-prefix
+   "<tab>" 'tab-next
+   "<backspace>" 'tab-previous
+   )
   )
 
 ;; Themes and appearance
@@ -252,6 +297,17 @@
     (evil-define-key 'normal compilation-mode-map "q" 'quit-window))
   )
 
+(use-package evil-nerd-commenter
+  :commands (evilnc-comment-operator)
+  :after evil
+  :config
+  (evilnc-default-hotkeys))
+
+(use-package evil-surround
+  :after evil
+  :config
+  (global-evil-surround-mode 1))
+
 ;; ==============================
 ;; vertico, consult etc
 ;; ==============================
@@ -297,13 +353,9 @@
   ;; Enable multiform mode for flexible layouts
   (vertico-multiform-mode)
   (setq vertico-multiform-categories
-	'((consult-grep buffer)
-	  (org-roam-node reverse indexed))
-	vertico-multiform-commands
-	'((consult-yank-pop indexed)
-	  (org-refile grid reverse)))
-  )
-
+        '((org-roam-node reverse indexed))
+        vertico-multiform-commands
+        '((consult-yank-pop indexed) (org-refile grid reverse))))
 
 ;; Use vertico-directory for file navigation
 (use-package vertico-directory
@@ -448,10 +500,11 @@ parses its input."
 	 ("C-M-#" . consult-register)
 	 ;; Other custom bindings
 	 ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+   ("C-c y" . consult-yank-from-kill-ring)
 	 ;; M-g bindings in `goto-map'
 	 ("M-g e" . consult-compile-error)
 	 ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
-	 ("M-g g" . consult-goto-line)             ;; orig. goto-line
+	 ("M-g l" . consult-goto-line)             ;; orig. goto-line
 	 ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
 	 ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
 	 ("M-g m" . consult-mark)
@@ -463,7 +516,7 @@ parses its input."
 	 ("M-s c" . consult-locate)
 	 ("M-s G" . consult-grep)
 	 ("M-s g" . consult-git-grep)
-	 ("M-s r" . consult-ripgrep)
+	 ("M-s s" . consult-ripgrep)
 	 ("M-s l" . consult-line)
 	 ("M-s L" . consult-line-multi)
 	 ("M-s k" . consult-keep-lines)
@@ -477,6 +530,7 @@ parses its input."
 	 ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
 	 ;; Minibuffer history
 	 :map minibuffer-local-map
+   ("M-i" . my/consult-insert-word-at-point)
 	 ("M-s" . consult-history)                 ;; orig. next-matching-history-element
 	 ("M-r" . consult-history))                ;; orig. previous-matching-history-element
 
@@ -491,7 +545,7 @@ parses its input."
   ;; preview for `consult-register', `consult-register-load',
   ;; `consult-register-store' and the Emacs built-ins.
   (setq register-preview-delay 0.5
-	register-preview-function #'consult-register-format)
+        register-preview-function #'consult-register-format)
 
   ;; Optionally tweak the register preview window.
   ;; This adds thin lines, sorting and hides the mode line of the window.
@@ -499,7 +553,7 @@ parses its input."
 
   ;; Use Consult to select xref locations with preview
   (setq xref-show-xrefs-function #'consult-xref
-	xref-show-definitions-function #'consult-xref)
+        xref-show-definitions-function #'consult-xref)
 
   ;; Configure other variables and modes in the :config section,
   ;; after lazily loading the package.
@@ -546,9 +600,17 @@ parses its input."
   (advice-add #'project-find-regexp :override #'consult-ripgrep)
 )
 
+(defun my/consult-insert-word-at-point ()
+  "Insert the word or symbol at point from the original buffer into the minibuffer."
+  (interactive)
+  (let ((word (with-current-buffer (window-buffer (minibuffer-selected-window))
+                (or (thing-at-point 'symbol t)
+                    (thing-at-point 'word t)))))
+    (when word
+      (insert word))))
+
 ;; Enable rich annotations using the Marginalia package
 (use-package marginalia
-  :ensure t
   ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
   ;; available in the *Completions* buffer, add it to the
   ;; `completion-list-mode-map'.
@@ -598,7 +660,6 @@ parses its input."
 		 (window-parameters (mode-line-format . none)))))
 
 (use-package corfu
-  :ensure t
   :init
   (global-corfu-mode)
   :general
@@ -607,7 +668,9 @@ parses its input."
    "C-j" #'corfu-next
    "C-k" #'corfu-previous
    "<escape>" #'corfu-quit
+   "C-g" #'corfu-quit
    "<return>" #'corfu-insert
+   "<S-SPC>" #'corfu-insert-separator
    "<TAB>" #'corfu-complete
    "C-i" #'corfu-quick-insert
    "M-d" #'corfu-info-documentation
@@ -615,8 +678,7 @@ parses its input."
   :config
   (setq corfu-auto t
 	corfu-auto-prefix 1
-	corfu-count 20)
-  )
+	corfu-count 20))
 
 ;; Install and configure cape
 (use-package cape
@@ -626,7 +688,10 @@ parses its input."
   (add-to-list 'completion-at-point-functions #'cape-dabbrev)
   (add-to-list 'completion-at-point-functions #'cape-file)
   (add-to-list 'completion-at-point-functions #'cape-keyword)
-  (add-to-list 'completion-at-point-functions #'cape-symbol)
+  (add-to-list 'completion-at-point-functions #'cape-elisp-symbol)
+  (add-to-list 'completion-at-point-functions #'cape-elisp-block)
+  (add-to-list 'completion-at-point-functions #'cape-history)
+  (add-to-list 'completion-at-point-functions #'cape-line)
   ;; Additional cape sources can be added here
   )
 
@@ -659,18 +724,218 @@ parses its input."
     ))
 
 ;; ==============================
+;; Shells and utilities
+;; ==============================
+
+(use-package eat
+  :straight (:type git
+             :host codeberg
+             :repo "akib/emacs-eat"
+             :files ("*.el" ("term" "term/*.el") "*.texi"
+                     "*.ti" ("terminfo/e" "terminfo/e/*")
+                     ("terminfo/65" "terminfo/65/*")
+                     ("integration" "integration/*")
+                     (:exclude ".dir-locals.el" "*-tests.el")))
+  :init
+  (setq eat-term-name "xterm-256color")
+  :hook ((eshell-load . eat-eshell-mode)
+         (eshell-load . eat-eshell-visual-command-mode)))
+
+(use-package eshell-git-prompt
+  :after eshell
+  :config
+  (eshell-git-prompt-use-theme 'powerline))
+
+(use-package eshell
+  :init
+  (setq eshell-history-size 10000
+        eshell-hist-ignoredups t
+        eshell-error-if-no-glob t
+        eshell-glob-case-insensitive t
+        eshell-scroll-to-bottom-on-input t
+        eshell-term-name "eat")
+  ;; (setq eshell-aliases-file "~/.emacs.vertico/eshell/alias")
+  :config
+  (add-hook 'eshell-mode-hook
+            (lambda ()
+              (setenv "TERM" "xterm-256color")
+              ;; (eshell/alias "ecs_exec_rt_rake" "eshell/ecs_exec_rt_rake $1")
+              (eshell/alias "ecs-exec-rt-rake" "my/ecs-exec-rt-console")
+              (eshell/alias "aws-set-creds" "my/aws-set-credentials")
+              (define-key eshell-mode-map (kbd "C-d")
+                          'my/eshell-quit-or-delete-char))))
+
+(defun my/eshell-quit-or-delete-char (arg)
+  "Quits the eshell or deletes ARG (a char)."
+  (interactive "p")
+  (if (and (eolp) (looking-back eshell-prompt-regexp))
+      (progn
+        (eshell-life-is-too-much) ; Why not? (eshell/exit)
+        (delete-window))
+    (delete-forward-char arg)))
+
+(defun my/eshell-here ()
+  "Opens up a new shell in the directory associated with the current
+buffer's file. The eshell is renamed to match that directory to make
+multiple eshell windows easier."
+  (interactive)
+  (let* ((parent (if (buffer-file-name)
+                     (file-name-directory (buffer-file-name))
+                   default-directory))
+         (height (/ (window-total-height) 3))
+         (name   (car (last (split-string parent "/" t)))))
+    (split-window-vertically (- height))
+    (other-window 1)
+    (eshell "new")
+    (rename-buffer (concat "*eshell: " name "*"))
+    (insert (concat "ls"))
+    (eshell-send-input)))
+
+;; (defun eshell/ecs_exec_rt_rake (task_name)
+;;   "Run ECS exec rake command from Eshell."
+;;   (let* ((region "eu-west-1")
+;;          (cluster "internal-production")
+;;          (container_name "running-tings")
+;;          (command (format "bundle exec rake %s" task_name))
+;;          (task_arns (shell-command-to-string
+;;                      (format "aws ecs list-tasks --region %s --cluster %s --family %s --desired-status RUNNING --query 'taskArns' --output text"
+;;                              region cluster container_name)))
+;;          (task_arn (car (split-string task_arns))))
+;;     (if (string-empty-p task_arn)
+;;         (progn
+;;           (message "No running tasks found for container: %s in cluster: %s" container_name cluster)
+;;           nil)
+;;       (shell-command
+;;        (format "aws ecs execute-command --region %s --cluster %s --task %s --container %s --command '%s' --interactive"
+;;                region cluster task_arn container_name command)))))
+
+;; (defun eshell/ecs_exec_rt_console ()
+;;   "Run ECS exec rake environment:console command from Eshell."
+;;   (let* ((region "eu-west-1")
+;;          (cluster "internal-production")
+;;          (container-name "running-tings")
+;;          (command "bundle exec rake environment:console")
+;;          (interactive "--interactive")
+;;          (aws-env (format "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
+;;                           (getenv "AWS_ACCESS_KEY_ID")
+;;                           (getenv "AWS_SECRET_ACCESS_KEY")
+;;                           (getenv "AWS_SESSION_TOKEN")))
+;;          (task-arns (string-trim
+;;                      (shell-command-to-string
+;;                       (format "%s aws ecs list-tasks \
+;;                                --region %s \
+;;                                --cluster %s \
+;;                                --family %s \
+;;                                --desired-status RUNNING \
+;;                                --query 'taskArns' \
+;;                                --output text"
+;;                               aws-env region cluster container-name))))
+;;          (task-arn (if (string-match "\\(arn:aws:ecs:[^[:space:]]+\\)" task-arns)
+;;                        (match-string 1 task-arns)
+;;                      "")))
+;;     (message "Raw task ARNs: %s" task-arns)
+;;     (if (string-empty-p task-arn)
+;;         (progn
+;;           (message "No running tasks found for container: %s in cluster: %s" container-name cluster)
+;;           nil)
+;;       (message "Executing rake task on container: %s with task ARN: %s" container-name task-arn)
+;;       (async-shell-command
+;;        (format "%s aws ecs execute-command \
+;;                 --region %s \
+;;                 --cluster %s \
+;;                 --task %s \
+;;                 --container %s \
+;;                 --command \"%s\" \
+;;                 %s"
+;;                aws-env region cluster task-arn container-name command interactive)))))
+
+(defun my/ecs-exec-rt-console ()
+  "Run ECS exec rake environment:console command from Eshell using a comint buffer."
+  (interactive)
+  (let* ((region "eu-west-1")
+         (cluster "internal-production")
+         (container-name "running-tings")
+         (command "bundle exec rake environment:console")
+         (interactive-flag "--interactive")
+         (buffer-name "*ecs-pry*")
+         
+         ;; AWS credentials from environment variables
+         (aws-env (format "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
+                          (getenv "AWS_ACCESS_KEY_ID")
+                          (getenv "AWS_SECRET_ACCESS_KEY")
+                          (getenv "AWS_SESSION_TOKEN")))
+
+         ;; Retrieve the running task ARN
+         (task-arns (string-trim
+                     (shell-command-to-string
+                      (format "%s aws ecs list-tasks \
+                               --region %s \
+                               --cluster %s \
+                               --family %s \
+                               --desired-status RUNNING \
+                               --query 'taskArns' \
+                               --output text"
+                              aws-env region cluster container-name))))
+         (task-arn (if (string-match "\\(arn:aws:ecs:[^[:space:]]+\\)" task-arns)
+                       (match-string 1 task-arns)
+                     "")))
+
+    ;; Display retrieved task ARNs for debugging
+    (message "Raw task ARNs: %s" task-arns)
+
+    ;; Check if task ARN was found
+    (if (string-empty-p task-arn)
+        (progn
+          (message "No running tasks found for container: %s in cluster: %s" container-name cluster)
+          nil)
+      (let ((ecs-command (format "%s aws ecs execute-command \
+                                   --region %s \
+                                   --cluster %s \
+                                   --task %s \
+                                   --container %s \
+                                   --command \"%s\" \
+                                   %s"
+                                 aws-env region cluster task-arn container-name command interactive-flag)))
+
+        ;; Create a comint buffer and run the command
+        (with-current-buffer (get-buffer-create buffer-name)
+          (unless (comint-check-proc (current-buffer))
+            (make-comint-in-buffer "ecs-pry" (current-buffer) "sh" nil "-c" ecs-command))
+          (display-buffer (current-buffer)))
+        
+        (message "Connected to ECS Pry session on container: %s" container-name)))))
+
+(defun my/aws-set-credentials ()
+  "Prompt to paste AWS credentials and set them in the environment."
+  (interactive)
+  (let ((input (read-string "Paste AWS credentials: ")))
+    (when (string-match "export AWS_ACCESS_KEY_ID=\"\\(.*?\\)\"" input)
+      (setenv "AWS_ACCESS_KEY_ID" (match-string 1 input)))
+    (when (string-match "export AWS_SECRET_ACCESS_KEY=\"\\(.*?\\)\"" input)
+      (setenv "AWS_SECRET_ACCESS_KEY" (match-string 1 input)))
+    (when (string-match "export AWS_SESSION_TOKEN=\"\\(.*?\\)\"" input)
+      (setenv "AWS_SESSION_TOKEN" (match-string 1 input))))
+  (message "AWS credentials set!"))
+
+(set-register ?e (cons 'file "~/.emacs.vertico/init.el"))
+(set-register ?z (cons 'file "~/.zshrc"))
+(set-register ?g (cons 'file "~/Documents/org/general.org"))
+(set-register ?n (cons 'file "~/Documents/org/notes.org"))
+(set-register ?a (cons 'file "~/Documents/org/ai-learning-plan.org"))
+
+;; ==============================
 ;; Magit
 ;; ==============================
 
 (use-package magit
-  :ensure t
+  :commands (magit-status magit-blame)
   :config
   ;; (setq magit-completing-read-function 'ivy-completing-read)
   ;; (setq magit-refs-local-branch-format "%4c %-25n %h %U%m\n")
   (magit-wip-mode 1))
 
 (use-package git-timemachine
-  :ensure t
+  :commands (git-timemachine-toggle)
   :config
   (evil-make-overriding-map git-timemachine-mode-map 'normal)
   (add-hook 'git-timemachine-mode-hook #'evil-normalize-keymaps))
@@ -685,6 +950,11 @@ parses its input."
 ;; ==============================
 ;; Software Development / Programming General
 ;; ==============================
+
+(add-hook 'prog-mode-hook
+          (lambda ()
+            (setq indent-tabs-mode nil)
+            (setq tab-width 2)))
 
 (use-package add-node-modules-path
   :config
@@ -738,9 +1008,7 @@ parses its input."
 	 ("C-<tab>" . copilot-accept-completion))
   :config
   (setq copilot-no-tab-map t)  ;; Prevent Copilot from overriding TAB
-
-  ;; Disable Copilot in ruby-mode to prevent conflicts with Solargraph
-  (add-hook 'ruby-mode-hook (lambda () (copilot-mode -1))))
+  )
 
 (use-package dumb-jump
   :commands (dumb-jump-go)
@@ -782,6 +1050,29 @@ parses its input."
 ;;   (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-setup))
 
 ;; ==============================
+;; Software Development / LLMs and Gen AI
+;; ==============================
+
+(use-package gptel
+  :commands (gptel gptel-send gptel-menu)
+  :init
+  (setq gptel-api-key
+        (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
+          (when entry
+            (let ((api-key (plist-get entry :key)))
+              (when (stringp api-key) api-key)))))
+  (setq gptel-default-model "gpt-4"
+        gptel-temperature 0.7)
+  :general
+  (:keymaps 'gptel-mode-map
+            :states '(normal insert visual motion)
+            "C-<return>" 'gptel-send)  ;; Send input with Ctrl+Enter
+  (tyrant-def
+    "jg" '(gptel :which-key "Open GPT chat")
+    "js" '(gptel-send :which-key "Send to GPT")
+    "jm" '(gptel-menu :which-key "GPT Menu")))
+
+;; ==============================
 ;; Software Development / Programming Language Specific
 ;; ==============================
 
@@ -812,6 +1103,170 @@ parses its input."
   (setq typescript-indent-level 2))
 
 ;; ==============================
+;; org-mode
+;; ==============================
+
+(use-package org
+  :straight t
+
+  :config
+  (setq org-directory "~/Documents/org")
+
+  (setq org-agenda-files '("~/Documents/org/agenda.org"
+                           "~/Documents/org/notes.org"
+                           "~/Documents/org/ai-notes.org"
+                           "~/Documents/org/tasks.org"
+                           "~/Documents/org/ai-tasks.org"
+                           "~/Documents/org/ai-learning-plan.org"
+                           "~/Documents/org/journal.org"))
+
+  (setq org-log-done 'time)  ;; Log timestamp when a task is marked DONE
+  (setq org-startup-indented t)  ;; Pretty indentation
+  (setq org-insert-heading-respect-content t)
+  (setq org-fold-catch-invisible-edits 'show-and-error)
+  (setq org-pretty-entities t)
+  (setq org-hide-emphasis-markers t)
+
+  (setq org-agenda-start-on-weekday nil
+        org-agenda-span 'week
+        org-deadline-warning-days 7)
+
+  (setq org-agenda-custom-commands
+        '(("c" "Custom Agenda"
+           ((agenda "")
+            (todo "NEXT")
+            (tags "project")))
+
+          ;; View All TODOs (General + AI, Scheduled + Unscheduled)
+          ("T" "All TODOs"
+           ((todo "TODO")))
+
+          ;; General TODOs Only (Excludes AI)
+          ("g" "General TODOs (Non-AI)"
+           ((tags-todo "-ai")))
+
+          ;; AI-related TODOs Only
+          ("a" "AI TODOs"
+           ((tags-todo "ai")))
+
+          ;; Scheduled Tasks Only
+          ("s" "Scheduled Tasks"
+           ((agenda "" ((org-agenda-entry-types '(:scheduled))))))
+
+          ;; Unscheduled Tasks Only
+          ("u" "Unscheduled Tasks"
+           ((todo "TODO"
+                  ((org-agenda-todo-ignore-scheduled 'all)
+                   (org-agenda-todo-ignore-deadlines 'all)))))))
+
+  (setq org-habit-graph-column 60)
+
+  ;; Org Capture
+  (setq org-capture-templates
+        '(;; General Tasks
+          ("t" "Task" entry
+           (file+headline "~/Documents/org/tasks.org" "Backlog")
+           "* TODO %?\n  %u\n  %a")
+
+          ;; Scheduled Tasks
+          ("s" "Scheduled Task" entry
+           (file+headline "~/Documents/org/tasks.org" "Scheduled Tasks")
+           "* TODO %?\nSCHEDULED: %^t\n  %u\n  %a")
+
+          ;; Notes
+          ("n" "Note" entry (file+headline "~/Documents/org/notes.org" "Notes")
+           "* %?\n  %u\n  %a")
+
+          ;; Journal
+          ("j" "Journal" entry (file+datetree "~/Documents/org/journal.org")
+           "* %?\nEntered on %U")
+
+          ;; AI Tasks
+          ("a" "AI Task" entry
+           (file+headline "~/Documents/org/ai-tasks.org" "AI Learning Tasks")
+           "* TODO %? :ai:\n  %u\n  Linked to: [[file:ai-learning-plan.org::*%^{Topic}]]\n  %a")
+          
+          ;; Scheduled AI Tasks
+          ("A" "Scheduled AI Task" entry
+           (file+headline "~/Documents/org/ai-tasks.org" "Scheduled AI Learning Tasks")
+           "* TODO %? :ai:\nSCHEDULED: %t\n:PROPERTIES:\n:ID: %U\n:END:\nLinked to: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
+
+          ("l" "AI Note" entry
+           (file+headline "~/Documents/org/ai-notes.org" "AI Notes")
+           "* %? :ai:\nEntered on %U\n\nRelated to: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
+
+          ("p" "AI Journal Entry" entry
+           (file+datetree "~/Documents/org/journal.org")
+           "* %? :ai:\nEntered on %U\n\nProgress on AI Learning: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
+          ))
+
+  ;; Org Refile Settings
+  (setq org-refile-targets '((("~/org/ai-learning-plan.org") :maxlevel . 2)
+                             (("~/org/ai-tasks.org") :maxlevel . 2)
+                             (("~/org/tasks.org") :maxlevel . 2)
+                             (("~/org/ai-notes.org") :maxlevel . 2)
+                             (("~/org/notes.org") :maxlevel . 2)
+                             (("~/org/journal.org") :maxlevel . 2))))
+
+(use-package evil-org
+  :after org
+  :hook (org-mode . evil-org-mode)
+  :config
+  (require 'evil-org-agenda)
+  (evil-org-agenda-set-keys))
+
+(use-package org-ql
+  :after org)
+
+(defun my/org-ql-ai-notes ()
+  "Display second-level AI-related notes from ai-notes.org using org-ql."
+  (interactive)
+  (org-ql-search "~/Documents/org/ai-notes.org"
+    '(or (parent "AI Notes")
+         (tags "ai"))  ;; Only include direct subheadings of "AI Notes"
+    ;; '(path "AI Notes")  ;; Match headings under "AI Notes"
+    :sort '(date priority)
+    :super-groups '((:name "AI Notes"
+                           :auto-map (lambda (_) "AI Notes"))  ;; Override default category
+                    (:name "Important AI Notes"
+                           :tag "important")
+                    (:name "Recent AI Notes"
+                           :date t))))
+
+(defun my/org-ql-general-notes ()
+  "Display second-level general notes from notes.org using org-ql."
+  (interactive)
+  (org-ql-search "~/Documents/org/notes.org"
+    '(or (parent "Notes")
+         (tags "notes"))  ;; Include direct subheadings of "Notes" or tagged notes
+    :sort '(date priority)
+    :super-groups '((:name "Notes"
+                           :auto-map (lambda (_) "Notes"))
+                    (:name "Important Notes"
+                           :tag "important")
+                    (:name "Recent Notes"
+                           :date t))))
+
+(defun my/org-ql-journal-entries ()
+  "Display journal entries from journal.org using org-ql."
+  (interactive)
+  (org-ql-search "~/Documents/org/journal.org"
+    '(ts)  ;; Use 'ts' for all timestamps, or 'ts-active' for only active timestamps
+    :sort '(date)
+    :super-groups '((:name "Recent Entries" :date t))))
+
+(defun my/org-ql-outstanding-todos ()
+  "Search for outstanding TODOs in the org folder, sorted by most recently created first if they have a date."
+  (interactive)
+  (org-ql-search (directory-files "~/Documents/org/" t "\\.org$")
+    '(todo)  ;; Select headings with TODO status
+    :sort '(date)
+    :super-groups '((:name "Outstanding TODOs"
+                           :todo t)
+                    (:name "Recently Created"
+                           :date t))))
+
+;; ==============================
 ;; Stuff
 ;; ==============================
 
@@ -825,9 +1280,9 @@ parses its input."
 (defun my/compile-in-environments-directory ()
   (interactive)
   (let ((default-directory
-	  (if (string= (file-name-extension buffer-file-name) "tf")
-	      (concat default-directory "./aws/terraform/environments")
-	    default-directory))))
+	       (if (string= (file-name-extension buffer-file-name) "tf")
+	           (concat default-directory "./aws/terraform/environments")
+	         default-directory))))
   (call-interactively #'compile))
 
 (defun my/rubocop-autocorrect ()
@@ -841,48 +1296,48 @@ or directly if not."
   (when (eq major-mode 'ruby-mode)
     (save-buffer)  ;; Ensure buffer is saved before running Rubocop
     (let* (
-	   ;; Define the names of docker-compose files to look for
-	   (docker-compose-files '("docker-compose.yml" "docker-compose.yaml"))
+	         ;; Define the names of docker-compose files to look for
+	         (docker-compose-files '("docker-compose.yml" "docker-compose.yaml"))
 
-	   ;; Find the project root by locating a docker-compose file or Gemfile
-	   (project-root
-	    (or
-	     (locate-dominating-file buffer-file-name "docker-compose.yml")
-	     (locate-dominating-file buffer-file-name "docker-compose.yaml")
-	     (locate-dominating-file buffer-file-name "Gemfile")
-	     default-directory))
+	         ;; Find the project root by locating a docker-compose file or Gemfile
+	         (project-root
+	          (or
+	           (locate-dominating-file buffer-file-name "docker-compose.yml")
+	           (locate-dominating-file buffer-file-name "docker-compose.yaml")
+	           (locate-dominating-file buffer-file-name "Gemfile")
+	           default-directory))
 
-	   ;; Set the default directory to the project root
-	   (default-directory (or project-root default-directory))
+	         ;; Set the default directory to the project root
+	         (default-directory (or project-root default-directory))
 
-	   ;; Get the absolute path of the current file
-	   (file (buffer-file-name))
+	         ;; Get the absolute path of the current file
+	         (file (buffer-file-name))
 
-	   ;; Get the path of the current file relative to the project root
-	   (relative-file (file-relative-name file default-directory))
+	         ;; Get the path of the current file relative to the project root
+	         (relative-file (file-relative-name file default-directory))
 
-	   ;; Determine the Rubocop command based on the project setup
-	   (rubocop-command
-	    (cond
-	     ;; If a docker-compose file is present, assume containerized project
-	     ((or
-	       (file-exists-p (expand-file-name "docker-compose.yml" project-root))
-	       (file-exists-p (expand-file-name "docker-compose.yaml" project-root)))
-	      ;; Construct the Docker Compose command to run Rubocop inside the 'web' container
-	      (format "docker compose exec web bundle exec rubocop -A %s"
-		      (shell-quote-argument relative-file)))
+	         ;; Determine the Rubocop command based on the project setup
+	         (rubocop-command
+	          (cond
+	           ;; If a docker-compose file is present, assume containerized project
+	           ((or
+	             (file-exists-p (expand-file-name "docker-compose.yml" project-root))
+	             (file-exists-p (expand-file-name "docker-compose.yaml" project-root)))
+	            ;; Construct the Docker Compose command to run Rubocop inside the 'web' container
+	            (format "docker compose exec web bundle exec rubocop -A %s"
+		                  (shell-quote-argument relative-file)))
 
-	     ;; Else if Bundler is available, use it to run Rubocop
-	     ((executable-find "bundle")
-	      (format "bundle exec rubocop -A %s" (shell-quote-argument relative-file)))
+	           ;; Else if Bundler is available, use it to run Rubocop
+	           ((executable-find "bundle")
+	            (format "bundle exec rubocop -A %s" (shell-quote-argument relative-file)))
 
-	     ;; Else, run Rubocop directly
-	     (t
-	      (format "rubocop -A %s" (shell-quote-argument relative-file))))))
+	           ;; Else, run Rubocop directly
+	           (t
+	            (format "rubocop -A %s" (shell-quote-argument relative-file))))))
       ;; Start the Rubocop process in a compilation buffer named "*Rubocop Autocorrect*"
       (compilation-start rubocop-command
-			 'compilation-mode
-			 (lambda (mode-name) "*Rubocop Autocorrect*")))))
+			                   'compilation-mode
+			                   (lambda (mode-name) "*Rubocop Autocorrect*")))))
 
 ;; ==============================
 ;; Emacs Auto-gen

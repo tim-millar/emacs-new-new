@@ -1,6 +1,12 @@
 ;;; -*- lisp-data -*-
-(("~/.emacs.vertico/")
+(("~/code/palace/sentry/")
+ ("~/code/palace/visions/")
+ ("~/code/palace/mario/")
+ ("~/.emacs.vertico/")
+ ("~/code/palace/aws-running-tings/")
  ("~/code/palace/running-tings/")
+ ("~/code/palace/aws-infrastructure/")
+ ("~/code/palace/shopify-frontend/")
  ("~/code/palace/two-merch-two-tool/")
  ("/Users/timmillar/code/palace/palace-wordpress/")
  ("/Users/timmillar/code/palace/two-merch-two-tool/")

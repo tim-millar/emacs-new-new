@@ -50,6 +50,19 @@
       `((".*" "~/.emacs.d/auto-save-list/" t))
       backup-by-copying t)
 
+;; Globally disable tabs for indentation
+(setq-default indent-tabs-mode nil)
+
+;; Set default tab width and indentation level to 2 spaces
+(setq-default tab-width 2)
+(setq-default standard-indent 2)
+
+;; Ensure all programming modes use 2-space indentation
+(add-hook 'prog-mode-hook
+          (lambda ()
+            (setq-local indent-tabs-mode nil)
+            (setq-local tab-width 2)))
+
 ;; set package archives
 ;; ==============================
 
@@ -196,14 +209,30 @@
 
    "gg" 'dumb-jump-go
    "gG" 'dumb-jump-back
-
-   "oa" '(org-agenda :which-key "org-agenda")
-   "oc" '(org-capture :which-key "org-capture")
-   "on" '(my/org-ql-ai-notes :which-key "org-ql-ai-notes")
-   "oN" '(my/org-ql-general-notes :which-key "org-ql-general-notes")
-   "oj" '(my/org-ql-journal-entries :which-key "org-ql-journal-entries")
-   "ot" '(my/org-ql-outstanding-todos :which-key "org-ql-outstanding-todos")
   )
+
+  (tyrant-def
+    ;; Org Agenda and Capture
+    "oa" '(org-agenda :which-key "org-agenda")
+    "oc" '(org-capture :which-key "org-capture")
+    ;; Org-QL commands
+    "oq" '(:ignore t :which-key "org-queries")
+    "oqn" '(my/org-ql-ai-notes :which-key "org-ql-ai-notes")
+    "oqN" '(my/org-ql-general-notes :which-key "org-ql-general-notes")
+    "oqj" '(my/org-ql-journal-entries :which-key "org-ql-journal-entries")
+    "oqt" '(my/org-ql-outstanding-todos :which-key "org-ql-outstanding-todos")
+    "oqg" 'org-tags-view
+    ;; Org Roam commands grouped under "or"
+    "or" '(:ignore t :which-key "org-roam")
+    "orc" '(org-roam-capture :which-key "org-roam capture")
+    "orf" '(consult-org-roam-file-find :which-key "org-roam file find")
+    "ori" '(org-roam-node-insert :which-key "org-roam node insert")
+    "ort" '(org-roam-buffer-toggle :which-key "org-roam buffer toggle")
+    "orb" '(consult-org-roam-backlinks :which-key "org-roam backlinks")
+    "orB" '(consult-org-roam-backlinks-recursive :which-key "org-roam backlinks recursive")
+    "orl" '(consult-org-roam-forward-links :which-key "org-roam forward links")
+    "orr" '(consult-org-roam-search :which-key "org-roam search")
+    )
 
   (general-define-key
    :keymaps 'tab-prefix-map
@@ -973,7 +1002,8 @@ multiple eshell windows easier."
 ;; lsp mode
 ;; lsp-mode for language server integration
 (use-package lsp-mode
-  :hook ((ruby-mode . lsp)
+  :hook
+  ((ruby-mode . lsp)
 	 (python-mode . lsp)
 	 (js-mode . lsp))
   :commands lsp lsp-deferred
@@ -988,8 +1018,8 @@ multiple eshell windows easier."
   (setq lsp-solargraph-use-bundler nil
 	lsp-solargraph-diagnostics t)
   (setq lsp-completion-provider :none
-	lsp-idle-delay 0.0
-	lsp-enable-snippet t)
+        lsp-idle-delay 0.0
+        lsp-enable-snippet t)
   (setq lsp-prefer-flymake nil)
   (setq lsp-solargraph-server-command '("docker" "compose" "exec" "-T" "web" "bundle" "exec" "solargraph" "stdio")))
 
@@ -1003,8 +1033,11 @@ multiple eshell windows easier."
 
 ;; Install and configure Copilot
 (use-package copilot
-  :hook (prog-mode . copilot-mode)
-  :bind (("C-TAB" . copilot-accept-completion)  ;; Bind Ctrl+Tab to accept Copilot suggestions
+  :hook
+  ((prog-mode . copilot-mode)
+   (org-mode . (lambda () (copilot-mode -1))))
+  :bind
+  (("C-TAB" . copilot-accept-completion)  ;; Bind Ctrl+Tab to accept Copilot suggestions
 	 ("C-<tab>" . copilot-accept-completion))
   :config
   (setq copilot-no-tab-map t)  ;; Prevent Copilot from overriding TAB
@@ -1102,13 +1135,25 @@ multiple eshell windows easier."
   :init
   (setq typescript-indent-level 2))
 
+(use-package web-mode
+  :mode
+  (("\\.erb$" . web-mode)
+   ("\\.html?" . web-mode))
+  :init
+  (setq web-mode-code-indent-offset 2
+	      web-mode-css-indent-offset 2
+	      web-mode-enable-css-colorization t
+	      web-mode-markup-indent-offset 2
+	      web-mode-script-padding 2
+	      web-mode-style-padding 2))
+
 ;; ==============================
 ;; org-mode
 ;; ==============================
 
 (use-package org
   :straight t
-
+  :hook (org-mode . visual-line-mode)
   :config
   (setq org-directory "~/Documents/org")
 
@@ -1118,7 +1163,8 @@ multiple eshell windows easier."
                            "~/Documents/org/tasks.org"
                            "~/Documents/org/ai-tasks.org"
                            "~/Documents/org/ai-learning-plan.org"
-                           "~/Documents/org/journal.org"))
+                           "~/Documents/org/journal.org"
+                           "~/Documents/org/roam"))
 
   (setq org-log-done 'time)  ;; Log timestamp when a task is marked DONE
   (setq org-startup-indented t)  ;; Pretty indentation
@@ -1126,6 +1172,21 @@ multiple eshell windows easier."
   (setq org-fold-catch-invisible-edits 'show-and-error)
   (setq org-pretty-entities t)
   (setq org-hide-emphasis-markers t)
+
+  ;; Enable syntax highlighting in code blocks
+  (setq org-src-fontify-natively t)
+
+  ;; Enable desired languages for code block evaluation
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+     (python     . t)
+     (js         . t)
+     (sql        . t)
+     (ruby       . t)
+     (css        . t)
+     (makefile   . t)
+     (shell      . t)))
 
   (setq org-agenda-start-on-weekday nil
         org-agenda-span 'week
@@ -1215,13 +1276,20 @@ multiple eshell windows easier."
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
 
+(use-package consult-org
+  :after (org consult)
+  :straight nil
+  :commands (consult-org-heading consult-org-agenda))
+
 (use-package org-ql
   :after org)
 
 (defun my/org-ql-ai-notes ()
   "Display second-level AI-related notes from ai-notes.org using org-ql."
   (interactive)
-  (org-ql-search "~/Documents/org/ai-notes.org"
+  (org-ql-search
+   (append (list "~/Documents/org/ai-notes.org")
+           (directory-files "~/Documents/org/roam/" t "\\.org$"))
     '(or (parent "AI Notes")
          (tags "ai"))  ;; Only include direct subheadings of "AI Notes"
     ;; '(path "AI Notes")  ;; Match headings under "AI Notes"
@@ -1265,6 +1333,82 @@ multiple eshell windows easier."
                            :todo t)
                     (:name "Recently Created"
                            :date t))))
+
+(use-package org-roam
+  :straight t
+  :after org
+  :commands (org-roam-buffer-toggle
+             org-roam-node-find
+             org-roam-node-insert
+             org-roam-capture)
+  :custom
+  (org-roam-directory (file-truename "~/Documents/org/roam"))
+  (org-roam-completion-everywhere t)
+  :config
+  (org-roam-db-autosync-mode)
+  (setq org-roam-capture-templates
+        '(("r" "research note" plain "* ${my-title}\n\n%?"
+           :target (file+head "%<%Y%m%d%H%M%S>-${my-slug}.org"
+                              "#+title: ${my-title}\n")
+           :unnarrowed t)
+          ("a" "AI research note" plain "* ${my-title}\n\n%?"
+           :target (file+head "%<%Y%m%d%H%M%S>-${my-slug}.org"
+                              "#+title: ${my-title}\n#+filetags: ai\n")
+           :unnarrowed t
+           :tags "ai")
+          ))
+  )
+
+(use-package consult-org-roam
+   :after (consult org-roam)
+   :commands (consult-org-roam-file-find
+              consult-org-roam-backlinks
+              consult-org-roam-backlinks-recursive
+              consult-org-roam-forward-links
+              consult-org-roam-search)
+   :init
+   (require 'consult-org-roam)
+   ;; Activate the minor mode
+   (consult-org-roam-mode 1)
+   :custom
+   ;; Use `ripgrep' for searching with `consult-org-roam-search'
+   (consult-org-roam-grep-func #'consult-ripgrep)
+   ;; Configure a custom narrow key for `consult-buffer'
+   (consult-org-roam-buffer-narrow-key ?r)
+   ;; Display org-roam buffers right after non-org-roam buffers
+   ;; in consult-buffer (and not down at the bottom)
+   (consult-org-roam-buffer-after-buffers t)
+   :config
+   ;; Eventually suppress previewing for certain functions
+   (consult-customize
+    consult-org-roam-forward-links
+    :preview-key "M-."))
+
+;; Org AI integration with Org-mode
+(use-package org-ai
+  :straight (:host github :repo "rksm/org-ai"
+             :files ("*.el" "README.md" "snippets"))
+  :after org
+  :commands (org-ai-mode org-ai-global-mode)
+  :hook (org-mode . org-ai-mode)  ;; Enable org-ai in Org buffers
+  :init
+  (setq org-ai-default-chat-model "gpt-4o-mini"
+        org-ai-openai-api-token (getenv "OPENAI_API_KEY")  ;; Ensure you set this in your environment
+        org-ai-directory (expand-file-name "org-ai" org-directory))
+  :config
+  ;; Enable org-ai globally (optional, remove if you prefer manual activation)
+  (org-ai-global-mode)
+  ;; Keybindings under "oi" (Org AI)
+  (with-eval-after-load 'general
+    (tyrant-def
+      "oi" '(:ignore t :which-key "org-ai")   ;; Org AI group
+      "oim" '(org-ai-mode :which-key "toggle org-ai")
+      "oic" '(org-ai-chat :which-key "AI chat")
+      "oip" '(org-ai-prompt :which-key "AI prompt")
+      "oii" '(org-ai-insert :which-key "insert completion")
+      "oie" '(org-ai-edit :which-key "edit text")
+      "ois" '(org-ai-summarize :which-key "summarize region")
+      "oit" '(org-ai-translate :which-key "translate region"))))
 
 ;; ==============================
 ;; Stuff

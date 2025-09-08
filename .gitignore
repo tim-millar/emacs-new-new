@@ -4,3 +4,7 @@
 /transient/
 /history
 /*~
+/.cache/
+/straight/
+/url/
+/org-roam.db

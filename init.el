@@ -62,6 +62,7 @@
           (lambda ()
             (setq-local indent-tabs-mode nil)
             (setq-local tab-width 2)))
+(setq js-indent-level 2)
 
 ;; set package archives
 ;; ==============================
@@ -357,6 +358,11 @@
   (defun kb/basic-remote-all-completions (string table pred point)
     (and (vertico--remote-p string)
 	 (completion-basic-all-completions string table pred point)))
+  (defun kb/vertico-quick-embark (&optional arg)
+    "Embark on candidate using quick keys."
+    (interactive)
+    (when (vertico-quick-jump)
+      (embark-act arg)))
   (add-to-list 'completion-styles-alist
 	       '(basic-remote kb/basic-remote-try-completion kb/basic-remote-all-completions nil))
 
@@ -951,6 +957,7 @@ multiple eshell windows easier."
 (set-register ?g (cons 'file "~/Documents/org/general.org"))
 (set-register ?n (cons 'file "~/Documents/org/notes.org"))
 (set-register ?a (cons 'file "~/Documents/org/ai-learning-plan.org"))
+(set-register ?d (cons 'file "~/Downloads"))
 
 ;; ==============================
 ;; Magit
@@ -969,6 +976,10 @@ multiple eshell windows easier."
   (evil-make-overriding-map git-timemachine-mode-map 'normal)
   (add-hook 'git-timemachine-mode-hook #'evil-normalize-keymaps))
 
+(setq ediff-window-setup-function 'ediff-setup-windows-plain)
+(setq ediff-split-window-function 'split-window-horizontally)
+(setq ediff-keep-variants nil)
+
 ;; ==============================
 ;; Writing
 ;; ==============================
@@ -986,18 +997,199 @@ multiple eshell windows easier."
             (setq tab-width 2)))
 
 (use-package add-node-modules-path
-  :config
-  (add-hook 'js-mode-hook 'add-node-modules-path))
+  :hook ((js-ts-mode tsx-ts-mode typescript-ts-mode json-ts-mode)
+         . add-node-modules-path))
 
+;; flycheck
+;; ==============================
 (use-package flycheck
   :after add-node-modules-path
   :init
   (setq flycheck-ruby-rubocop-executable "docker compose exec web bundle exec rubocop")
   (global-flycheck-mode))
 
+;; flycheck debugging functions
+;; ==============================
+(defun my/--expand-tilde (path)
+  (if (and path (string-prefix-p "~" path))
+      (expand-file-name path)
+    path))
+
+(defun my/eslint--exec ()
+  (let ((exe (or (bound-and-true-p flycheck-javascript-eslint-executable)
+                 (executable-find "eslint_d")
+                 (executable-find "eslint")
+                 (user-error "No eslint/eslint_d found"))))
+    (my/--expand-tilde exe)))
+
+(defun my/project-root-or-default ()
+  (or (when-let ((pr (project-current))) (project-root pr))
+      default-directory))
+
+(defun my/eslint--file-arg ()
+  "File arg for ESLint: relative to project root (works in containers)."
+  (unless buffer-file-name (user-error "Buffer not visiting a file"))
+  (let* ((root (file-truename (my/project-root-or-default)))
+         (file (file-truename buffer-file-name)))
+    (if (string-prefix-p root file)
+        (file-relative-name file root)
+      ;; fall back if not in project
+      buffer-file-name)))
+
+(defun my/eslint-version ()
+  (interactive)
+  (let* ((exe (my/eslint--exec))
+         (cmd (format "%s --version" (shell-quote-argument exe))))
+    (compilation-start cmd 'compilation-mode (lambda (_) "*eslint-version*"))))
+
+(defun my/eslint-print-config ()
+  (interactive)
+  (let* ((exe (my/eslint--exec))
+         (file (my/eslint--file-arg))
+         (cmd (format "%s --print-config %s"
+                      (shell-quote-argument exe)
+                      (shell-quote-argument file))))
+    (compilation-start cmd 'compilation-mode (lambda (_) "*eslint-print-config*"))))
+
+(defun my/eslint-config-trace ()
+  (interactive)
+  (let* ((exe (my/eslint--exec))
+         (file (my/eslint--file-arg))
+         (process-environment (cons "DEBUG=eslint:config:*" process-environment))
+         (cmd (format "%s --print-config %s"
+                      (shell-quote-argument exe)
+                      (shell-quote-argument file))))
+    (compilation-start cmd 'compilation-mode (lambda (_) "*eslint-config-trace*"))))
+
+;; select right node version
+;; ==============================
+;; (require 'seq)
+
+;; (defun my/closest-node-bin (exe &optional start-dir)
+;;   "Return the closest node_modules/.bin/EXE from START-DIR upward, or nil."
+;;   (let* ((dir (file-truename (or start-dir
+;;                                  (when-let ((pr (project-current))) (project-root pr))
+;;                                  default-directory)))
+;;          (root (locate-dominating-file dir "node_modules/.bin"))
+;;          (candidate (and root (expand-file-name (concat "node_modules/.bin/" exe) root))))
+;;     (when (and candidate (file-exists-p candidate)) candidate)))
+
+;; (defun my/flat-config-present-p (&optional start-dir)
+;;   "Non-nil if a flat ESLint config exists at/above START-DIR."
+;;   (let* ((dir (file-truename (or start-dir default-directory)))
+;;          (root (or (when-let ((pr (project-current))) (project-root pr)) dir)))
+;;     (seq-some (lambda (n) (file-exists-p (expand-file-name n root)))
+;;               '("eslint.config.js" "eslint.config.mjs" "eslint.config.cjs"))))
+
+;; (defun my/js-pick-eslint ()
+;;   "Prefer project-local eslint(_d); only add --no-eslintrc for flat config."
+;;   (let* ((dir (or (when-let ((pr (project-current))) (project-root pr)) default-directory))
+;;          ;; Prefer local > global
+;;          (exe (or (my/closest-node-bin "eslint_d" dir)
+;;                   (my/closest-node-bin "eslint" dir)
+;;                   (executable-find "eslint_d")
+;;                   (executable-find "eslint"))))
+;;     (setq-local flycheck-javascript-eslint-executable exe)
+;;     ;; Only forbid .eslintrc when a flat config exists
+;;     (setq-local flycheck-javascript-eslint-args
+;;                 (when (my/flat-config-present-p dir) '("--no-eslintrc")))
+;;     ;; no container path rewriting on host
+;;     (setq-local flycheck-substitute-paths nil)))
+
+;; ;; Ensure node_modules/.bin is on PATH, then pick eslint (picker runs *after*)
+;; (dolist (h '(js-ts-mode-hook tsx-ts-mode-hook typescript-ts-mode-hook json-ts-mode-hook))
+;;   (add-hook h #'my/js-pick-eslint 'append))
+;; run after add-node-modules-path
+;; ==============================
+
+;; select right eslint version
+;; ==============================
+(require 'seq)
+
+(defcustom my/eslint-prefer-container 'when-running
+  "Prefer docker wrapper in dockerized repos."
+  :type '(choice (const always) (const when-running) (const never)))
+
+(defun my/docker-project-root-p (&optional dir)
+  (let* ((d (file-truename (or dir default-directory)))
+         (root (or (when-let ((pr (project-current nil d))) (project-root pr)) d)))
+    (seq-some (lambda (n) (file-exists-p (expand-file-name n root)))
+              '("docker-compose.yml" "docker-compose.yaml" "compose.yml" "compose.yaml"))))
+
+(defun my/docker-service-running-p (&optional service)
+  (eq 0 (call-process "bash" nil nil nil "-lc"
+                      (format "docker compose ps -q %s 2>/dev/null | grep -q ." (or service "web")))))
+
+(defun my/closest-node-bin (exe &optional dir)
+  (let* ((d (file-truename (or dir default-directory)))
+         (root (or (when-let ((pr (project-current nil d))) (project-root pr)) d))
+         (p (expand-file-name (concat "node_modules/.bin/" exe) root)))
+    (when (file-exists-p p) p)))
+
+(defun my/flat-config-present-p (&optional dir)
+  (let* ((d (file-truename (or dir default-directory)))
+         (root (or (when-let ((pr (project-current nil d))) (project-root pr)) d)))
+    (seq-some (lambda (n) (file-exists-p (expand-file-name n root)))
+              '("eslint.config.js" "eslint.config.mjs" "eslint.config.cjs"))))
+
+(defun my/js-pick-eslint ()
+  "Order: container > project eslint(_d) > global. Also set env/path mapping."
+  (let* ((d (file-truename (or (and (project-current) (project-root (project-current))) default-directory)))
+         (wrapper (expand-file-name "~/bin/eslint-in-docker"))
+         (docker-ok (and (file-exists-p wrapper) (my/docker-project-root-p d)
+                         (pcase my/eslint-prefer-container
+                           ('always t) ('when-running (my/docker-service-running-p "web")))))
+         (exe (or (and docker-ok wrapper)
+                  (my/closest-node-bin "eslint_d" d)
+                  (my/closest-node-bin "eslint" d)
+                  (executable-find "eslint_d")
+                  (executable-find "eslint"))))
+    (setq-local flycheck-javascript-eslint-executable exe)
+    ;; Only add --no-eslintrc for flat-config projects
+    (setq-local flycheck-javascript-eslint-args (when (my/flat-config-present-p d) '("--no-eslintrc")))
+    ;; Node tools on PATH
+    (when (fboundp 'add-node-modules-path) (add-node-modules-path))
+    ;; Container extras
+    (if (and docker-ok (string= exe wrapper))
+        (let ((host-root (directory-file-name d)))
+          (setq-local process-environment
+                      (append (list "ESLINT_SERVICE=web"
+                                    "ESLINT_WORKDIR=/usr/src/app"
+                                    (concat "HOST_ROOT=" host-root))
+                              process-environment))
+          (setq-local flycheck-substitute-paths (list (cons "/usr/src/app" host-root))))
+      (setq-local flycheck-substitute-paths nil))))
+
+(dolist (h '(js-ts-mode-hook tsx-ts-mode-hook typescript-ts-mode-hook json-ts-mode-hook))
+  (add-hook h #'my/js-pick-eslint 'append))
+
+(defun my/eslint-toggle-container ()
+  (interactive)
+  (setq-local my/eslint-prefer-container
+              (if (eq my/eslint-prefer-container 'never) 'always 'never))
+  (message "my/eslint-prefer-container → %s" my/eslint-prefer-container)
+  (my/js-pick-eslint)
+  (flycheck-buffer))
+;; ==============================
+
 (use-package direnv
   :config
   (direnv-mode))
+
+(use-package apheleia
+  :init
+  (setq apheleia-mode-alist
+        '((js-ts-mode . prettier) (tsx-ts-mode . prettier)
+          (typescript-ts-mode . prettier) ; or biome
+          (ruby-ts-mode . rubocop)        ; or standardrb
+          (elixir-ts-mode . mix-format)   ; mix format
+          (sql-mode . pgformatter)))
+  :config (apheleia-global-mode +1))
+
+(use-package sqlformat
+  :hook (sql-mode . sqlformat-on-save-mode)
+  :init (setq sqlformat-command 'pgformatter
+              sqlformat-args '("-s2" "-g")))
 
 ;; lsp mode
 ;; lsp-mode for language server integration
@@ -1028,20 +1220,8 @@ multiple eshell windows easier."
   :commands lsp-ui-mode
   :config
   (setq lsp-ui-sideline-enable t
-	lsp-ui-peek-enable t
-	lsp-ui-doc-enable t))
-
-;; Install and configure Copilot
-(use-package copilot
-  :hook
-  ((prog-mode . copilot-mode)
-   (org-mode . (lambda () (copilot-mode -1))))
-  :bind
-  (("C-TAB" . copilot-accept-completion)  ;; Bind Ctrl+Tab to accept Copilot suggestions
-	 ("C-<tab>" . copilot-accept-completion))
-  :config
-  (setq copilot-no-tab-map t)  ;; Prevent Copilot from overriding TAB
-  )
+        lsp-ui-peek-enable t
+        lsp-ui-doc-enable t))
 
 (use-package dumb-jump
   :commands (dumb-jump-go)
@@ -1057,44 +1237,139 @@ multiple eshell windows easier."
   (add-to-list 'xref-backend-functions 'dumb-jump-xref-activate)
   (dumb-jump-mode))
 
-;; eglot doesn't work!
-;; ;; Install and configure eglot
-;; (use-package eglot
-;;   :hook
-;;   (ruby-mode . eglot-ensure)
-;;   :config
-;;   (setq eglot-inlay-hints-mode t)
-;;   ;; Using solargraph directly
-;;   ;; (add-to-list 'eglot-server-programs '((ruby-mode) . ("solargraph" "socket" "--port" "0")))
-;;   ;; (add-to-list 'eglot-server-programs
-;;   ;;		       '(ruby-mode . ("/Users/timmillar/code/palace/running-tings/debug.sh")))
-;;   (add-to-list 'eglot-server-programs
-;;	       '(ruby-mode . ("/Users/timmillar/.gem/ruby/2.7.5/bin/solargraph" "socket" "--port" "0")))
+;; treesitter stuff 
+(use-package treesit
+  :straight nil
+  :init
+  (setq treesit-language-source-alist
+        '((bash        "https://github.com/tree-sitter/tree-sitter-bash")
+          (css         "https://github.com/tree-sitter/tree-sitter-css")
+          (dockerfile  "https://github.com/camdencheek/tree-sitter-dockerfile")
+          (elixir      "https://github.com/elixir-lang/tree-sitter-elixir")
+          (heex        "https://github.com/phoenixframework/tree-sitter-heex")
+          (html        "https://github.com/tree-sitter/tree-sitter-html")
+          (javascript  "https://github.com/tree-sitter/tree-sitter-javascript")
+          (json        "https://github.com/tree-sitter/tree-sitter-json")
+          (markdown    "https://github.com/ikatyang/tree-sitter-markdown")
+          (python      "https://github.com/tree-sitter/tree-sitter-python")
+          (ruby        "https://github.com/tree-sitter/tree-sitter-ruby")
+          (sql         "https://github.com/DerekStride/tree-sitter-sql")
+          (toml        "https://github.com/tree-sitter/tree-sitter-toml")
+          (typescript  "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")
+          (tsx         "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
+          (yaml        "https://github.com/ikatyang/tree-sitter-yaml"))))
 
-;;   (setq eglot-connect-timeout 60)
+(use-package treesit-auto
+  :custom (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode))
 
-;;   ;; Optional: Increase eglot's logging level for more detailed logs
-;;   ;; (setq eglot-events-buffer-size 5000)
-;; )
+(use-package evil-textobj-tree-sitter
+  :after evil
+  :config
+  ;; Methods/functions
+  (define-key evil-outer-text-objects-map "f"
+              (evil-textobj-tree-sitter-get-textobj "function.outer"))
+  (define-key evil-inner-text-objects-map "f"
+              (evil-textobj-tree-sitter-get-textobj "function.inner"))
+  ;; Classes/modules
+  (define-key evil-outer-text-objects-map "c"
+              (evil-textobj-tree-sitter-get-textobj "class.outer"))
+  (define-key evil-inner-text-objects-map "c"
+              (evil-textobj-tree-sitter-get-textobj "class.inner"))
+  ;; Blocks (do…end / {…})
+  (define-key evil-outer-text-objects-map "b"
+              (evil-textobj-tree-sitter-get-textobj "block.outer"))
+  (define-key evil-inner-text-objects-map "b"
+              (evil-textobj-tree-sitter-get-textobj "block.inner"))
+  (define-key evil-outer-text-objects-map "a"
+              (evil-textobj-tree-sitter-get-textobj ("conditional.outer" "loop.outer" "block.outer" "function.outer")))
+  (define-key evil-inner-text-objects-map "a"
+              (evil-textobj-tree-sitter-get-textobj ("conditional.inner" "loop.inner" "block.inner" "function.inner")))
+  ;; Goto start of next function
+  (define-key evil-normal-state-map
+              (kbd "]f")
+              (lambda ()
+                (interactive)
+                (evil-textobj-tree-sitter-goto-textobj "function.outer")))
+  ;; Goto start of previous function
+  (define-key evil-normal-state-map
+              (kbd "[f")
+              (lambda ()
+                (interactive)
+                (evil-textobj-tree-sitter-goto-textobj "function.outer" t)))
+  ;; Goto end of next function
+  (define-key evil-normal-state-map
+              (kbd "]F")
+              (lambda ()
+                (interactive)
+                (evil-textobj-tree-sitter-goto-textobj "function.outer" nil t)))
+  ;; Goto end of previous function
+  (define-key evil-normal-state-map
+              (kbd "[F")
+              (lambda ()
+                (interactive)
+                (evil-textobj-tree-sitter-goto-textobj "function.outer" t t))))
 
-;; (use-package flycheck-eglot
-;;   :after (eglot flycheck)
-;;   :config
-;;   (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-setup))
+;; Combobulate on supported modes (JS/TS/TSX/HTML/JSON/YAML/TOML/Go, etc.)
+(use-package combobulate
+  :straight (combobulate
+             :type git :host github :repo "mickeynp/combobulate"
+             :files ("*.el"))           ;; ignore tests/docs during build
+  :hook ((prog-mode . combobulate-mode))
+  :custom (combobulate-key-prefix "C-c o"))
+
+;; --- Evil-style bindings for common structural edits ------------------------
+;; Use concrete command symbols where public; fall back to sending the default keys
+;; Combobulate defaults (as of now):
+;;   C-M-n / C-M-p  : next/prev sibling
+;;   M-N / M-P      : drag node down/up
+;;   M-<right>      : splice outer (“vanish parent”)
+;;   M-h            : expand node selection (à la expand-region)
+(defun my/combobulate-sibling-next () (interactive) (execute-kbd-macro (kbd "C-M-n")))
+(defun my/combobulate-sibling-prev () (interactive) (execute-kbd-macro (kbd "C-M-p")))
+(defun my/combobulate-drag-down   () (interactive) (execute-kbd-macro (kbd "M-N")))
+(defun my/combobulate-drag-up     () (interactive) (execute-kbd-macro (kbd "M-P")))
+(defun my/combobulate-splice-outer() (interactive) (execute-kbd-macro (kbd "M-<right>")))
+(defun my/combobulate-expand      () (interactive) (execute-kbd-macro (kbd "M-h")))
+
+;; If available in your checkout, prefer the public commands directly:
+(when (fboundp 'combobulate-drag-up)   (defalias 'my/combobulate-drag-up   #'combobulate-drag-up))
+(when (fboundp 'combobulate-drag-down) (defalias 'my/combobulate-drag-down #'combobulate-drag-down))
+;; Expand region is typically `combobulate-mark-node-dwim`:
+(when (fboundp 'combobulate-mark-node-dwim) (defalias 'my/combobulate-expand #'combobulate-mark-node-dwim))
+
+;; Evil bindings (normal/visual)
+(with-eval-after-load 'evil
+  (define-key evil-normal-state-map (kbd "]e") #'my/combobulate-sibling-next)
+  (define-key evil-normal-state-map (kbd "[e") #'my/combobulate-sibling-prev)
+  (define-key evil-visual-state-map (kbd "]e") #'my/combobulate-sibling-next)
+  (define-key evil-visual-state-map (kbd "[e") #'my/combobulate-sibling-prev)
+
+  (define-key evil-normal-state-map (kbd "]E") #'my/combobulate-drag-down)
+  (define-key evil-normal-state-map (kbd "[E") #'my/combobulate-drag-up)
+  (define-key evil-visual-state-map (kbd "]E") #'my/combobulate-drag-down)
+  (define-key evil-visual-state-map (kbd "[E") #'my/combobulate-drag-up)
+
+  (define-key evil-normal-state-map (kbd "gS")  #'my/combobulate-splice-outer) ; “splice (vanish parent)”
+  (define-key evil-visual-state-map (kbd "gS")  #'my/combobulate-splice-outer)
+  (define-key evil-normal-state-map (kbd "g=")  #'my/combobulate-expand) ; expand selection
+  (define-key evil-visual-state-map (kbd "g=")  #'my/combobulate-expand))
 
 ;; ==============================
 ;; Software Development / LLMs and Gen AI
 ;; ==============================
 
 (use-package gptel
-  :commands (gptel gptel-send gptel-menu)
+  :commands (gptel gptel-request gptel-send gptel-menu)
   :init
   (setq gptel-api-key
         (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
           (when entry
             (let ((api-key (plist-get entry :key)))
               (when (stringp api-key) api-key)))))
-  (setq gptel-default-model "gpt-4"
+  (setq gptel-default-model "gpt-4o"
         gptel-temperature 0.7)
   :general
   (:keymaps 'gptel-mode-map
@@ -1104,6 +1379,65 @@ multiple eshell windows easier."
     "jg" '(gptel :which-key "Open GPT chat")
     "js" '(gptel-send :which-key "Send to GPT")
     "jm" '(gptel-menu :which-key "GPT Menu")))
+
+;; Org AI integration with Org-mode
+(use-package org-ai
+  :straight (:host github :repo "rksm/org-ai"
+             :files ("*.el" "README.md" "snippets"))
+  :after org
+  :commands (org-ai-mode org-ai-global-mode)
+  :hook (org-mode . org-ai-mode)  ;; Enable org-ai in Org buffers
+  :init
+  (setq org-ai-auto-fill t)
+  (setq org-ai-default-chat-model "gpt-4o"
+        org-ai-openai-api-token (getenv "OPENAI_API_KEY")  ;; Ensure you set this in your environment
+        org-ai-directory (expand-file-name "org-ai" org-directory))
+  :config
+  ;; Enable org-ai globally (optional, remove if you prefer manual activation)
+  (org-ai-global-mode)
+  (org-ai-install-yasnippets)
+  ;; Keybindings under "oi" (Org AI)
+  (with-eval-after-load 'general
+    (tyrant-def
+      "oi" '(:ignore t :which-key "org-ai")   ;; Org AI group
+      ;; "oim" '(org-ai-mode :which-key "toggle org-ai")
+      "oir" '(org-ai-on-region :which-key "AI on region")
+      "ois" '(org-ai-summarize :which-key "summarize region")
+      "oif" '(org-ai-refactor-code :which-key "AI refactor code")
+      "oit" '(org-ai-prompt :which-key "AI prompt")
+      "oip" '(org-ai-on-project :which-key "AI on project")
+      "oit" '(org-ai-switch-chat-model :which-key "AI switch chat model")
+      "oix" '(org-ai-explain-code :which-key "AI explain code")
+      )))
+
+(use-package aidermacs
+  :straight (:host github :repo "MatthewZMD/aidermacs")
+  :commands (aidermacs-start aidermacs-send)
+  :init
+  ;; Use the provided code to retrieve the OpenAI API key
+  (setq aidermacs-openai-api-token
+        (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
+          (when entry
+            (let ((api-key (plist-get entry :key)))
+              (when (stringp api-key) api-key))))
+
+        ;; Set the default model to o4-mini-high
+        aidermacs-default-model "o4-mini-high"
+
+        ;; Optional: Adjust temperature if desired
+        aidermacs-temperature 0.7)
+  :config
+  ;; You can define additional settings here if required by the aidermacs package
+  (setq aidermacs-history-max-length 50)  ;; Example: Keep a history of the last 50 interactions
+  :general
+  ;; Place both aidermacs and gptel keybindings under the SPACE-j prefix
+  (:keymaps 'aidermacs-mode-map
+            :states '(normal insert visual motion)
+            "C-<return>" 'aidermacs-send)  ;; Send input with Ctrl+Enter
+
+  ;; Define SPACE-j bindings for both aidermacs and gptel
+  (tyrant-def
+    "ja" '(aidermacs-transient-menu :which-key "Start Aider Menu")))
 
 ;; ==============================
 ;; Software Development / Programming Language Specific
@@ -1147,12 +1481,22 @@ multiple eshell windows easier."
 	      web-mode-script-padding 2
 	      web-mode-style-padding 2))
 
+(use-package markdown-mode
+  :mode ("README\\.md\\'" . gfm-mode)
+  :init
+  (setq markdown-command "multimarkdown")
+  (setq markdown-fontify-code-blocks-natively t)
+  :bind
+  (:map markdown-mode-map
+         ("C-c C-e" . markdown-do)))
+
 ;; ==============================
 ;; org-mode
 ;; ==============================
 
 (use-package org
   :straight t
+  :defer t
   :hook (org-mode . visual-line-mode)
   :config
   (setq org-directory "~/Documents/org")
@@ -1186,6 +1530,7 @@ multiple eshell windows easier."
      (ruby       . t)
      (css        . t)
      (makefile   . t)
+     (mermaid    . t)
      (shell      . t)))
 
   (setq org-agenda-start-on-weekday nil
@@ -1259,6 +1604,13 @@ multiple eshell windows easier."
           ("p" "AI Journal Entry" entry
            (file+datetree "~/Documents/org/journal.org")
            "* %? :ai:\nEntered on %U\n\nProgress on AI Learning: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
+
+          ;; Fitness stuff
+          ("w" "💪 Daily Workout Log"
+           entry
+           (file+datetree "~/Documents/org/roam/fitness/workout-log.org")
+           "* %<%Y-%m-%d> Daily Workout\n\n%?"
+           :empty-lines 1)
           ))
 
   ;; Org Refile Settings
@@ -1384,31 +1736,145 @@ multiple eshell windows easier."
     consult-org-roam-forward-links
     :preview-key "M-."))
 
-;; Org AI integration with Org-mode
-(use-package org-ai
-  :straight (:host github :repo "rksm/org-ai"
-             :files ("*.el" "README.md" "snippets"))
-  :after org
-  :commands (org-ai-mode org-ai-global-mode)
-  :hook (org-mode . org-ai-mode)  ;; Enable org-ai in Org buffers
+(use-package ob-mermaid
+  ;; :defer t
+  :after (org general)
   :init
-  (setq org-ai-default-chat-model "gpt-4o-mini"
-        org-ai-openai-api-token (getenv "OPENAI_API_KEY")  ;; Ensure you set this in your environment
-        org-ai-directory (expand-file-name "org-ai" org-directory))
+  ;; Path to Mermaid CLI (via npm)
+  (setq ob-mermaid-cli-path "~/.nvm/versions/node/v20.14.0/bin/mmdc")
+  (setq org-babel-mermaid-cli-args '("-t" "default" "-o" "svg"))
+
+  :hook (org-babel-before-execute . my/org-babel-setup-mermaid-output-dir)
+
   :config
-  ;; Enable org-ai globally (optional, remove if you prefer manual activation)
-  (org-ai-global-mode)
-  ;; Keybindings under "oi" (Org AI)
-  (with-eval-after-load 'general
-    (tyrant-def
-      "oi" '(:ignore t :which-key "org-ai")   ;; Org AI group
-      "oim" '(org-ai-mode :which-key "toggle org-ai")
-      "oic" '(org-ai-chat :which-key "AI chat")
-      "oip" '(org-ai-prompt :which-key "AI prompt")
-      "oii" '(org-ai-insert :which-key "insert completion")
-      "oie" '(org-ai-edit :which-key "edit text")
-      "ois" '(org-ai-summarize :which-key "summarize region")
-      "oit" '(org-ai-translate :which-key "translate region"))))
+  (defun my/org-babel-setup-mermaid-output-dir ()
+    "Set `org-babel-mermaid-output-dir` relative to Org file and create it if missing."
+    (when (and buffer-file-name (derived-mode-p 'org-mode))
+      (let* ((dir (expand-file-name "img" (file-name-directory buffer-file-name))))
+        (setq-local org-babel-mermaid-output-dir dir)
+        (unless (file-directory-p dir)
+          (make-directory dir t)))))
+
+  ;; ✅ Safely register Mermaid with existing org-babel languages
+  ;; (with-eval-after-load 'org
+  ;;   (let ((existing org-babel-load-languages))
+  ;;     (cl-pushnew '(mermaid . t) existing :test #'equal)
+  ;;     (org-babel-do-load-languages 'org-babel-load-languages existing)))
+
+  ;; Org-style keybindings using general
+  (general-define-key
+   :keymaps 'org-mode-map
+   "C-c C-v m" #'org-babel-execute-src-block
+   "C-c C-v o" #'org-open-at-point))
+
+;; ==============================
+;; org geopolitics briefing
+;; ==============================
+;; (require 'org-id)
+
+(defvar my/geopolitics-dir "~/Documents/org/roam/geopolitics/daily-briefs")
+(defvar my/geopolitics-index-file (expand-file-name "global-geopolitics-briefs.org" my/geopolitics-dir))
+
+(defun my/auto-link-keywords (text)
+  "Link key entities like China, Russia, etc. using Org-roam-style [[...]] links."
+  (replace-regexp-in-string
+   "\\b\\(China\\|Russia\\|United States\\|EU\\|Middle East\\|Red Sea\\|energy flows\\|financial markets\\|Ukraine\\|Taiwan\\)\\b"
+   "[[\\1]]"
+   text t))
+
+(defun my/auto-link-named-entities (text callback)
+  "Use GPT via gptel to extract and auto-link named entities in TEXT, then pass to CALLBACK."
+  (let ((prompt (concat
+                 "Given the following text, identify named entities (countries, organizations, regions, key concepts), "
+                 "and return the text with each named entity replaced by an Org-mode-style link like [[Entity]]. "
+                 "Don't modify anything else.\n\nText:\n" text)))
+    (gptel-request
+     prompt
+     :callback callback)))
+
+(defun my/insert-daily-geopolitics-brief (linked-text &rest _)
+  "Insert LINKED-TEXT as a new dated heading in the monthly geopolitics org-roam file."
+  (let* ((date-str (format-time-string "%Y-%m-%d"))
+         (month-str (format-time-string "%Y-%m"))
+         (file-name (concat month-str "-global-geopolitics-brief.org"))
+         (file-path (expand-file-name file-name my/geopolitics-dir))
+         (brief-title (concat date-str " - Global Geopolitics Brief"))
+         (monthly-link (concat "[[" file-name "][" month-str "]]")))
+    ;; Insert daily brief in monthly file
+    (with-current-buffer (find-file-noselect file-path)
+      (goto-char (point-max))
+      (insert (format "* %s\n:PROPERTIES:\n:ID: %s\n:ROAM_TAGS: geopolitics\n:END:\n\n"
+                      brief-title (org-id-new)))
+      (insert linked-text "\n\n")
+      (save-buffer))
+    ;; Ensure monthly file is linked from index
+    (with-current-buffer (find-file-noselect my/geopolitics-index-file)
+      (goto-char (point-min))
+      (unless (re-search-forward (regexp-quote monthly-link) nil t)
+        (goto-char (point-max))
+        (re-search-backward "^\\* Index" nil t)
+        (forward-line)
+        (insert (concat "- " monthly-link "\n"))
+        (save-buffer)))))
+
+(defun my/ensure-geopolitics-index ()
+  "Create the global geopolitics index file if it doesn't exist."
+  (unless (file-exists-p my/geopolitics-index-file)
+    (let ((buffer (find-file-noselect my/geopolitics-index-file)))
+      (with-current-buffer buffer
+        (read-only-mode -1)
+        (erase-buffer)
+        (insert "#+title: Global Geopolitics\n#+filetags: :geopolitics:index:\n\n* Index\n\n* Monthly Summaries\n")
+        (save-buffer)))))
+
+(defun my/generate-geopolitics-brief ()
+  "Generate the daily geopolitics brief using gptel and insert it."
+  (interactive)
+  (my/ensure-geopolitics-index)
+  (let ((prompt "Please summarise all of the important news and current events in the last 24 hours, especially with respect to ongoing conflicts in Asia, Europe, and the Middle East, especially with respect to global trade and energy flows, movements in financial and money markets, and especially with respect to the actions and activities of China, Russia, the United States, and the EU. I'm also interested in reading any important statements or communications made by representatives of the major powers with respect to any of the issues we are discussing. Provide a detailed Org-mode outline in plain text (do not include code fences or triple backticks). Do not include a top-level heading since the summary will be inserted under an existing date heading; instead, start with level-2 headings for each section. Go to level-3 or beyond as necessary. Include links to your sources next to each summary."))
+    (gptel-request
+     prompt
+     :callback (lambda (response &rest _)
+                 (message "Raw response: %s" response)
+                 (my/auto-link-named-entities
+                  response
+                  #'my/insert-daily-geopolitics-brief)))))
+
+(defun my/generate-monthly-geopolitics-summary ()
+  "Generate an AI summary of the current month's geopolitical briefs and update the global index."
+  (interactive)
+  (my/ensure-geopolitics-index)
+  (let* ((month-str (format-time-string "%Y-%m"))
+         (month-file-name (concat month-str "-global-geopolitics-brief.org"))
+         (month-file-path (expand-file-name month-file-name my/geopolitics-dir))
+         (index-buffer (find-file-noselect my/geopolitics-index-file))
+         (prompt-base "Please read the following global geopolitical briefs from the past month. Summarise the major developments, emerging trends, and turning points. Present the summary in bullet points under appropriate headings. Be concise, analytical, and neutral.\n\n---\n\n")
+         (month-content (with-temp-buffer
+                          (insert-file-contents month-file-path)
+                          (buffer-string)))
+         (prompt (concat prompt-base month-content)))
+    (gptel-request
+     prompt
+     :callback (lambda (response &rest _)
+                 (with-current-buffer index-buffer
+                   (goto-char (point-min))
+                   (re-search-forward "^\\* Monthly Summaries")
+                   (unless (re-search-forward (regexp-quote month-str) nil t)
+                     (insert (format "\n** %s\n[[%s][%s]]\n\n%s\n"
+                                     month-str month-file-name month-str response))
+                     (save-buffer)
+                     (message "Monthly summary added for %s" month-str)))))))
+
+(defun my/show-liturgical-season ()
+  (interactive)
+  (org-ql-search "~/Documents/org/roam/mysticism-and-philosophy/seasonal-prayer-rotation.org"
+    '(and (property "FROM")
+          (property "TO")
+          (let* ((from (org-entry-get nil "FROM"))
+                 (to   (org-entry-get nil "TO"))
+                 (today (format-time-string "[%Y-%m-%d]")))
+            (and (string<= from today) (string<= today to))))
+    :title "Today's Liturgical Season"))
 
 ;; ==============================
 ;; Stuff
@@ -1423,11 +1889,13 @@ multiple eshell windows easier."
 
 (defun my/compile-in-environments-directory ()
   (interactive)
-  (let ((default-directory
-	       (if (string= (file-name-extension buffer-file-name) "tf")
-	           (concat default-directory "./aws/terraform/environments")
-	         default-directory))))
-  (call-interactively #'compile))
+  (if (not buffer-file-name)
+      (message "Buffer is not visiting a file.")
+    (let ((default-directory
+           (if (string= (file-name-extension buffer-file-name) "tf")
+               (expand-file-name "aws/terraform/environments"
+                                 default-directory) default-directory)))
+      (call-interactively #'compile))))
 
 (defun my/rubocop-autocorrect ()
   "Run Rubocop autocorrect on the current buffer, handling containerized projects.
@@ -1493,7 +1961,29 @@ or directly if not."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(dumb-jump lsp-mode eglot flycheck-eglot direnv yaml-mode dockerfile-mode add-node-modules-path all-the-icons-completion all-the-icons-dired cape consult corfu doom-modeline doom-themes embark embark-consult evil-collection evil-escape exec-path-from-shell flycheck general git-timemachine magit marginalia orderless php-mode rvm terraform-mode vertico which-key writeroom-mode)))
+   '(dumb-jump lsp-mode eglot flycheck-eglot direnv yaml-mode dockerfile-mode add-node-modules-path all-the-icons-completion all-the-icons-dired cape consult corfu doom-modeline doom-themes embark embark-consult evil-collection evil-escape exec-path-from-shell flycheck general git-timemachine magit marginalia orderless php-mode rvm terraform-mode vertico which-key writeroom-mode))
+ '(safe-local-variable-values
+   '((flycheck-javascript-eslint-args "--no-eslintrc")
+     (eval let*
+           ((pr
+             (project-current))
+            (root
+             (if pr
+                 (project-root pr)
+               default-directory))
+            (host-root
+             (directory-file-name
+              (file-truename root))))
+           (setq-local flycheck-javascript-eslint-executable
+                       (expand-file-name "~/bin/eslint-in-docker"))
+           (setq-local process-environment
+                       (append
+                        (list "ESLINT_SERVICE=web" "ESLINT_WORKDIR=/usr/src/app"
+                              (concat "HOST_ROOT=" host-root))
+                        process-environment))
+           (setq-local flycheck-substitute-paths
+                       (list
+                        (cons "/usr/src/app" host-root)))))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

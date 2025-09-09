@@ -62,30 +62,11 @@
           (lambda ()
             (setq-local indent-tabs-mode nil)
             (setq-local tab-width 2)))
+
 (setq js-indent-level 2)
 
-;; set package archives
-;; ==============================
-
-;; (setq package-enable-at-startup nil)
-
-;; (setq package-archives '(
-;; 			 ("melpa" . "https://melpa.org/packages/")
-;; 			 ("melpa-stable" . "https://stable.melpa.org/packages/")
-;; 			 ("gnu" . "https://elpa.gnu.org/packages/")
-;; 			 ("org" . "https://orgmode.org/elpa/")
-;; 			 )
-;;       package-archive-priorities '(("melpa" . 1)))
-
-;; (package-initialize)
-
-;; (unless (package-installed-p 'use-package)
-;;   (package-refresh-contents)
-;;   (package-install 'use-package))
-
-;; (setq use-package-always-ensure t)
-
 ;; Bootstrap straight.el
+;; ==============================
 (defvar bootstrap-version)
 (let ((bootstrap-file
        (expand-file-name
@@ -122,6 +103,8 @@
     (exec-path-from-shell-initialize)))
 
 (setq auth-sources '("~/.authinfo"))
+
+(setq tab-bar-new-tab-choice "*scratch*")
 
 ;; General setup
 ;; ==============================
@@ -174,7 +157,7 @@
    "b" '(:ignore t :which-key "buffers")
    "bb" 'consult-buffer
    "bi" 'ibuffer
-   "bk" 'kill-this-buffer
+   "bk" 'kill-current-buffer
    "bK" 'kill-buffer-and-window
    "bs" 'save-buffer
    "bS" 'save-some-buffer
@@ -981,6 +964,48 @@ multiple eshell windows easier."
 (setq ediff-keep-variants nil)
 
 ;; ==============================
+;; editing
+;; ==============================
+
+(use-package smartparens
+  :diminish smartparens-mode)
+
+(use-package smartparens-config
+  :straight nil
+  :init
+  (smartparens-global-mode t)
+  (smartparens-global-strict-mode t)
+  (show-smartparens-global-mode t))
+
+;; (use-package evil-cleverparens
+;;   :after (evil smartparens)
+;;   :init
+;;   (add-hook 'smartparens-enabled-hook #'evil-cleverparens-mode))
+
+(use-package evil-smartparens
+  :diminish evil-smartparen-mode
+  :after (evil smartparens)
+  :init
+  (add-hook 'smartparens-enabled-hook #'evil-smartparens-mode))
+
+;; ==============================
+;; snippets
+;; ==============================
+(use-package yasnippet
+  :diminish yas-minor-mode
+  :config
+  (yas-global-mode 1))
+
+(use-package yasnippet-snippets
+  :after yasnippet)
+
+(use-package react-snippets
+  :after yasnippet)
+
+(use-package consult-yasnippet
+  :after yasnippet)
+
+;; ==============================
 ;; Writing
 ;; ==============================
 
@@ -1000,12 +1025,13 @@ multiple eshell windows easier."
   :hook ((js-ts-mode tsx-ts-mode typescript-ts-mode json-ts-mode)
          . add-node-modules-path))
 
+;; ==============================
 ;; flycheck
 ;; ==============================
+
 (use-package flycheck
   :after add-node-modules-path
   :init
-  (setq flycheck-ruby-rubocop-executable "docker compose exec web bundle exec rubocop")
   (global-flycheck-mode))
 
 ;; flycheck debugging functions
@@ -1102,10 +1128,10 @@ multiple eshell windows easier."
 ;; run after add-node-modules-path
 ;; ==============================
 
-;; select right eslint version
-;; ==============================
 (require 'seq)
 
+;; select right eslint version
+;; ==============================
 (defcustom my/eslint-prefer-container 'when-running
   "Prefer docker wrapper in dockerized repos."
   :type '(choice (const always) (const when-running) (const never)))
@@ -1170,6 +1196,67 @@ multiple eshell windows easier."
   (message "my/eslint-prefer-container → %s" my/eslint-prefer-container)
   (my/js-pick-eslint)
   (flycheck-buffer))
+;; ==============================
+
+;; select right rubocop version
+;; ==============================
+(defun my/project-root ()
+  (file-truename (or (when-let ((pr (project-current))) (project-root pr)) default-directory)))
+
+(defun my/docker-project-root-p (root)
+  (seq-some (lambda (n) (file-exists-p (expand-file-name n root)))
+            '("docker-compose.yml" "docker-compose.yaml" "compose.yml" "compose.yaml")))
+
+(defun my/docker-service-running-p (root &optional service)
+  (eq 0 (call-process "bash" nil nil nil "-lc"
+                      (format "cd %s && docker compose ps -q %s 2>/dev/null | grep -q ."
+                              (shell-quote-argument root) (or service "web")))))
+
+(defun my/docker-rubocop-present-p (root &optional service workdir)
+  (eq 0 (call-process "bash" nil nil nil "-lc"
+                      (format "cd %s && docker compose exec -T -w %s %s bash -lc 'bundle exec rubocop -v >/dev/null 2>&1'"
+                              (shell-quote-argument root) (or workdir "/usr/src/app") (or service "web")))))
+
+(defun my/closest-rubocop (root)
+  "Prefer bin/rubocop binstub, else rubocop in PATH."
+  (let* ((binstub (expand-file-name "bin/rubocop" root)))
+    (cond
+     ((file-exists-p binstub) binstub)
+     (t (executable-find "rubocop")))))
+
+(defun my/ruby-pick-rubocop ()
+  "Pick RuboCop: container > project bin/rubocop > global.
+Also wire env + path mapping for container runs."
+  (let* ((root (my/project-root))
+         (wrapper (expand-file-name "~/bin/rubocop-in-docker"))
+         (dockerized (my/docker-project-root-p root))
+         (container-ok (and dockerized (file-exists-p wrapper)
+                            (my/docker-service-running-p root "web")
+                            (my/docker-rubocop-present-p root "web" "/usr/src/app")))
+         (exe (or (and container-ok wrapper)
+                  (my/closest-rubocop root)
+                  (executable-find "ruby"))))  ;; last-ditch; enables 'ruby' checker at least
+    ;; Point Flycheck's RuboCop checker at our chosen executable
+    (setq-local flycheck-ruby-rubocop-executable exe)
+
+    ;; Container extras: env + path mapping so errors attach to host buffers
+    (if (and container-ok (string= exe wrapper))
+        (let ((host-root (directory-file-name root)))
+          (setq-local process-environment
+                      (append (list "RUBY_SERVICE=web"
+                                    "RUBY_WORKDIR=/usr/src/app"
+                                    (concat "HOST_ROOT=" host-root))
+                              process-environment))
+          ;; make sure container paths map back to host for Flycheck
+          (setq-local flycheck-substitute-paths (list (cons "/usr/src/app" host-root))))
+      (setq-local flycheck-substitute-paths nil))))
+
+(add-hook 'ruby-mode-hook    #'my/ruby-pick-rubocop)
+(add-hook 'ruby-ts-mode-hook #'my/ruby-pick-rubocop)
+;; ==============================
+
+;; ==============================
+;; general dev stuff
 ;; ==============================
 
 (use-package direnv
@@ -1369,7 +1456,7 @@ multiple eshell windows easier."
           (when entry
             (let ((api-key (plist-get entry :key)))
               (when (stringp api-key) api-key)))))
-  (setq gptel-default-model "gpt-4o"
+  (setq gptel-default-model "gpt-5"
         gptel-temperature 0.7)
   :general
   (:keymaps 'gptel-mode-map
@@ -1389,7 +1476,7 @@ multiple eshell windows easier."
   :hook (org-mode . org-ai-mode)  ;; Enable org-ai in Org buffers
   :init
   (setq org-ai-auto-fill t)
-  (setq org-ai-default-chat-model "gpt-4o"
+  (setq org-ai-default-chat-model "gpt-5"
         org-ai-openai-api-token (getenv "OPENAI_API_KEY")  ;; Ensure you set this in your environment
         org-ai-directory (expand-file-name "org-ai" org-directory))
   :config
@@ -1422,10 +1509,10 @@ multiple eshell windows easier."
               (when (stringp api-key) api-key))))
 
         ;; Set the default model to o4-mini-high
-        aidermacs-default-model "o4-mini-high"
+        aidermacs-default-model "gpt-5"
 
         ;; Optional: Adjust temperature if desired
-        aidermacs-temperature 0.7)
+        aidermacs-temperature 0.3)
   :config
   ;; You can define additional settings here if required by the aidermacs package
   (setq aidermacs-history-max-length 50)  ;; Example: Keep a history of the last 50 interactions
@@ -1438,6 +1525,12 @@ multiple eshell windows easier."
   ;; Define SPACE-j bindings for both aidermacs and gptel
   (tyrant-def
     "ja" '(aidermacs-transient-menu :which-key "Start Aider Menu")))
+
+(defun my/aidermacs-use (model)
+  "Switch aidermacs model for this session."
+  (interactive "sModel: ")
+  (setq aidermacs-default-model model)
+  (message "aidermacs-default-model → %s" model))
 
 ;; ==============================
 ;; Software Development / Programming Language Specific

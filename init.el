@@ -120,6 +120,8 @@
   :hook (after-init . (lambda ()
                         (mapc #'diminish minor-mode-list))))
 
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
 ;; Set general keybindings
 ;; ==============================
 
@@ -191,8 +193,8 @@
 
    "p" '(:keymap project-prefix-map :which-key "project")
 
-   "gg" 'dumb-jump-go
-   "gG" 'dumb-jump-back
+   ;; "gg" 'dumb-jump-go
+   ;; "gG" 'dumb-jump-back
   )
 
   (tyrant-def
@@ -279,9 +281,10 @@
   :init
   (setq evil-want-keybinding nil)
   (setq evil-disable-insert-state-bindings t)
-  (setq evil-undo-system 'undo-fu)
+  (setq evil-undo-system 'undo-redo
+        evil-want-fine-undo t)
   (setq evil-want-integration t)
-  (setq evil-want-C-u-scroll t)
+  ;; (setq evil-want-C-u-scroll t)
   (setq evil-want-C-i-jump nil)
   (setq evil-want-minibuffer nil)
   :config
@@ -532,6 +535,7 @@ parses its input."
 	 ;; M-s bindings in `search-map'
 	 ("M-s d" . consult-find)                  ;; Alternative: consult-fd
 	 ("M-s c" . consult-locate)
+	 ("M-s f" . consult-fd)
 	 ("M-s G" . consult-grep)
 	 ("M-s g" . consult-git-grep)
 	 ("M-s s" . consult-ripgrep)
@@ -581,9 +585,14 @@ parses its input."
   ;; is 'any, such that any key triggers the preview.
   ;; (setq consult-preview-key 'any)
   ;; (setq consult-preview-key "M-.")
+  (setq consult-preview-key "C-.")
   ;; (setq consult-preview-key '("S-<down>" "S-<up>"))
   ;; For some commands and buffer sources it is useful to configure the
   ;; :preview-key on a per-command basis using the `consult-customize' macro.
+  ;; (consult-customize
+  ;;  consult-ripgrep consult-git-grep consult-grep
+  ;;  :preview-key (kbd "C-.")))
+
   (consult-customize
    consult-theme :preview-key '(:debounce 0.2 any)
    consult-ripgrep consult-git-grep consult-grep
@@ -591,7 +600,8 @@ parses its input."
    consult--source-bookmark consult--source-file-register
    consult--source-recent-file consult--source-project-recent-file
    ;; :preview-key "M-."
-   :preview-key '(:debounce 0.4 any))
+   ;; :preview-key '(:debounce 0.4 any))
+   :preview-key (kbd "C-."))
 
   ;; Optionally configure the narrowing key.
   ;; Both < and C-+ work reasonably well.
@@ -720,6 +730,9 @@ parses its input."
   :hook (corfu-mode . corfu-popupinfo-mode)
   :config
   (setq corfu-popupinfo-delay 0.5))
+
+;; make project-find-file a bit faster
+(setq vc-follow-symlinks t)
 
 ;; ==============================
 ;; Dired
@@ -1310,21 +1323,10 @@ Also wire env + path mapping for container runs."
         lsp-ui-peek-enable t
         lsp-ui-doc-enable t))
 
-(use-package dumb-jump
-  :commands (dumb-jump-go)
-  :init
-  (setq dumb-jump-aggressive nil)
-  (setq xref-show-definitions-function #'xref-show-definitions-completing-read)
-  (setq dumb-jump-force-searcher 'rg)
-  ;; (setq dump-jump-debug t)
-  (setq dumb-jump-disable-obsolete-warnings t)
-  (setq dumb-jump-selector 'completing-read)
-  :config
-  ;; (add-hook 'xref-backend-functions #'dumb-jump-xref-activate)
-  (add-to-list 'xref-backend-functions 'dumb-jump-xref-activate)
-  (dumb-jump-mode))
+;; ==============================
+;; treesitter stuff
+;; ==============================
 
-;; treesitter stuff 
 (use-package treesit
   :straight nil
   :init
@@ -1347,10 +1349,35 @@ Also wire env + path mapping for container runs."
           (yaml        "https://github.com/ikatyang/tree-sitter-yaml"))))
 
 (use-package treesit-auto
-  :custom (treesit-auto-install 'prompt)
+  :custom
+  (treesit-auto-install 'prompt)
   :config
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode))
+  (global-treesit-auto-mode -1))
+
+;; 2) Emulate Emacs 29 and remap ONLY the modes you actually care about.
+;;    This avoids per-visit “ready?” checks across every possible language.
+(setq major-mode-remap-alist
+      '((ruby-mode        . ruby-ts-mode)
+        (js-mode          . js-ts-mode)
+        (typescript-mode  . typescript-ts-mode)
+        ;; If you used rjsx-mode or jsx via js-mode, route .jsx to js-ts-mode:
+        ;; (add-to-list 'auto-mode-alist '("\\.jsx\\'" . js-ts-mode))
+        ;; TSX files:
+        ;; Emacs 30 uses tsx-ts-mode; make sure .tsx goes there:
+        ;; (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+        (json-mode        . json-ts-mode)
+        (css-mode         . css-ts-mode)
+        (yaml-mode        . yaml-ts-mode)
+        (html-mode        . html-ts-mode)))
+
+;; Optional: make font-lock cheaper in -ts modes you do use.
+(setq treesit-font-lock-level 2)
+
+;; Optional: make first paint faster while you’re still moving around
+(setq jit-lock-defer-time 0.05
+      jit-lock-stealth-time 1)
+
+(global-so-long-mode 1)
 
 (use-package evil-textobj-tree-sitter
   :after evil
@@ -1401,11 +1428,20 @@ Also wire env + path mapping for container runs."
 
 ;; Combobulate on supported modes (JS/TS/TSX/HTML/JSON/YAML/TOML/Go, etc.)
 (use-package combobulate
-  :straight (combobulate
-             :type git :host github :repo "mickeynp/combobulate"
-             :files ("*.el"))           ;; ignore tests/docs during build
-  :hook ((prog-mode . combobulate-mode))
-  :custom (combobulate-key-prefix "C-c o"))
+  :straight (combobulate :type git :host github :repo "mickeynp/combobulate" :files ("*.el"))
+  :custom (combobulate-key-prefix "C-c o")
+  :hook (;; Start only for the languages you actually use with TS
+         (js-ts-mode         . my/combobulate-idle)
+         (tsx-ts-mode        . my/combobulate-idle)
+         (typescript-ts-mode . my/combobulate-idle)
+         (json-ts-mode       . my/combobulate-idle)
+         (html-ts-mode       . my/combobulate-idle)
+         (css-ts-mode        . my/combobulate-idle)
+         (yaml-ts-mode       . my/combobulate-idle)
+         (ruby-ts-mode       . my/combobulate-idle)))
+
+(defun my/combobulate-idle ()
+  (run-with-idle-timer 0.6 nil (lambda () (when (derived-mode-p 'prog-mode) (combobulate-mode 1)))))
 
 ;; --- Evil-style bindings for common structural edits ------------------------
 ;; Use concrete command symbols where public; fall back to sending the default keys
@@ -1445,6 +1481,94 @@ Also wire env + path mapping for container runs."
   (define-key evil-visual-state-map (kbd "g=")  #'my/combobulate-expand))
 
 ;; ==============================
+;; Code Nav
+;; ==============================
+;; Use built-in project.el safely (zero-arg wrapper for Citre)
+(defun my/citre-project-root ()
+  "Return current project root directory or nil."
+  (when-let ((pr (project-current)))          ; or (project-current t) if you want an error when not in a project
+    (if (fboundp 'project-root)               ; Emacs 28+
+        (expand-file-name (project-root pr))
+      (expand-file-name (car (project-roots pr))))))
+
+;; Make Emacs aware of already-built global-cache tags (in case you
+;; rebuild them outside Emacs, e.g., via a git hook).
+(defun my/citre--global-cache-tags-path (root)
+  ;; Citre encodes absolute paths by replacing "/" with "!" and wrapping with "!".
+  (let* ((enc (replace-regexp-in-string "/" "!" (directory-file-name root)))
+         (base (expand-file-name (format "!%s!.tags" enc) "~/.cache/tags")))
+    base))
+
+(defun my/citre-register-global-tags ()
+  (when-let* ((root (my/citre-project-root))
+              (tags (my/citre--global-cache-tags-path root)))
+    (when (file-exists-p tags)
+      (add-to-list 'citre-tags-file-alist (cons root tags)))))
+
+(use-package citre
+  :straight (citre :type git :host github :repo "universal-ctags/citre")
+  :init
+  ;; Recommended defaults (keymaps, peek UI, etc.)
+  (require 'citre-config)
+  :custom
+  ;; Use built-in project.el roots (magit/git works too)
+  (setq citre-project-root-function #'my/citre-project-root)
+  :hook ((prog-mode . citre-mode))  ; this enables xref + CAPF
+  :config
+  ;; Prefer Citre for xref; keep dumb-jump as a fallback
+  (setq xref-backend-functions
+        (delete-dups
+         (append (list #'citre-xref-backend
+                       #'dumb-jump-xref-activate)
+                 xref-backend-functions)))
+  (setq citre-default-create-tags-file-location 'global-cache)
+
+  (add-hook 'citre-mode-hook #'my/citre-register-global-tags)
+  ;; Handy: build/update tags quickly
+  ;; M-x citre-update-this-tags-file (per project)
+  )
+
+;; Xref with nice Consult UI + ripgrep engine
+(use-package xref
+  :custom
+  (xref-search-program 'ripgrep)
+  (xref-show-xrefs-function #'consult-xref)
+  (xref-show-definitions-function #'consult-xref)
+  :config
+  (with-eval-after-load 'xref
+    (add-hook 'xref--xref-buffer-mode-hook
+              (lambda () (when (bound-and-true-p next-error-follow-minor-mode)
+                           (next-error-follow-minor-mode -1))))))
+
+(use-package dumb-jump
+  :commands (dumb-jump-go)
+  :init
+  (setq dumb-jump-aggressive nil)
+  (setq xref-show-definitions-function #'xref-show-definitions-completing-read)
+  (setq dumb-jump-force-searcher 'rg)
+  (setq dumb-jump-disable-obsolete-warnings t)
+  (setq dumb-jump-selector 'completing-read)
+  :config
+  (add-to-list 'xref-backend-functions 'dumb-jump-xref-activate)
+  (dumb-jump-mode))
+
+;; --- Keys (Evil/general) ----------------------------------------------------
+;; Put these anywhere after general (and after citre if you like)
+(with-eval-after-load 'citre
+  ;; Core nav
+  (define-key goto-map (kbd "g") #'xref-find-definitions) ; SPC g g -> goto def (Citre via Xref)
+  (define-key goto-map (kbd "b") #'citre-jump-back)       ; SPC g b -> jump back
+  (define-key goto-map (kbd "r") #'xref-find-references)  ; SPC g r -> references
+  (define-key goto-map (kbd "P") #'citre-peek)            ; SPC g P -> peek def
+  (define-key goto-map (kbd "B") #'citre-peek-jump-back)) ; SPC g B -> peek back
+
+(with-eval-after-load 'prog-mode
+  (define-key prog-mode-map (kbd "M-.") #'xref-find-definitions) ; default anyway
+  (define-key prog-mode-map (kbd "M-,") #'citre-jump-back)
+  (define-key prog-mode-map (kbd "M-]") #'dumb-jump-go)
+  (define-key prog-mode-map (kbd "M-[") #'dumb-jump-back))
+
+;; ==============================
 ;; Software Development / LLMs and Gen AI
 ;; ==============================
 
@@ -1458,6 +1582,17 @@ Also wire env + path mapping for container runs."
               (when (stringp api-key) api-key)))))
   (setq gptel-default-model "gpt-5"
         gptel-temperature 0.7)
+
+  ;; (require 'gptel-openai-extras) ; bundled with gptel
+  ;; (gptel-make-openai "OpenAI+"
+  ;;   :host "api.openai.com"
+  ;;   :endpoint "/v1/chat/completions"
+  ;;   :models '("gpt-5")
+  ;;   :request-params '((reasoning_effort . "high")
+  ;;                     (verbosity . "low")))
+  ;; (setq gptel-backend (gptel-backend "OpenAI+")
+  ;;       gptel-model "gpt-5")
+
   :general
   (:keymaps 'gptel-mode-map
             :states '(normal insert visual motion)
@@ -1477,8 +1612,12 @@ Also wire env + path mapping for container runs."
   :init
   (setq org-ai-auto-fill t)
   (setq org-ai-default-chat-model "gpt-5"
-        org-ai-openai-api-token (getenv "OPENAI_API_KEY")  ;; Ensure you set this in your environment
         org-ai-directory (expand-file-name "org-ai" org-directory))
+  (setq org-ai-openai-api-token
+        (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
+          (when entry
+            (let ((api-key (plist-get entry :key)))
+              (when (stringp api-key) api-key)))))
   :config
   ;; Enable org-ai globally (optional, remove if you prefer manual activation)
   (org-ai-global-mode)
@@ -1532,6 +1671,21 @@ Also wire env + path mapping for container runs."
   (setq aidermacs-default-model model)
   (message "aidermacs-default-model → %s" model))
 
+;; (use-package model-switcher
+;;   :commands (my/aidermacs-choose-model my/openai-refresh-models)
+;;   :after (aidermacs general)         ;; loads after your keybinding stack
+;;   :init
+;;   ;; (setq my/openai-base-url "https://api.openai.com/v1") ;; change if needed
+;;   :config
+;;   ;; If you *didn’t* keep the keybindings inside model-switcher.el,
+;;   ;; you can put them here instead:
+;;   ;; (when (fboundp 'tyrant-def)
+;;   ;;   (tyrant-def
+;;   ;;     "jm" '(my/aidermacs-choose-model :which-key "Choose Aider model")
+;;   ;;     "jM" '(my/openai-refresh-models :which-key "Refresh models")))
+;;   )
+
+
 ;; ==============================
 ;; Software Development / Programming Language Specific
 ;; ==============================
@@ -1561,6 +1715,9 @@ Also wire env + path mapping for container runs."
   :mode "\\.tsx?\\'"
   :init
   (setq typescript-indent-level 2))
+
+(add-to-list 'auto-mode-alist '("\\.cjs\\'" . js-mode))
+(add-to-list 'auto-mode-alist '("\\.mjs\\'" . js-mode))
 
 (use-package web-mode
   :mode

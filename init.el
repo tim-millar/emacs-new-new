@@ -237,7 +237,35 @@
   :config
   (load-theme 'doom-nord t)
   (doom-themes-visual-bell-config)
-  (doom-themes-org-config))
+  (doom-themes-org-config)
+
+  ;; brighter comments
+  (set-face-attribute 'font-lock-comment-face nil
+                      :foreground "#7F8C98")
+  (set-face-attribute 'font-lock-comment-delimiter-face nil
+                      :foreground "#7F8C98")
+
+  ;; de-emphasised text (used by many packages, incl. minibuffer hints)
+  (set-face-attribute 'shadow nil
+                      :foreground "#8C9BAA")
+
+  ;; ;; Consult: extra info (e.g. file names in consult-ripgrep)
+  ;; (with-eval-after-load 'consult
+  ;;   (set-face-attribute 'consult-annotation nil
+  ;;                       :foreground "#88C0D0"))
+
+  ;; ;; Marginalia: annotations in completion UI
+  ;; (with-eval-after-load 'marginalia
+  ;;   (set-face-attribute 'marginalia-documentation nil
+  ;;                       :foreground "#8FBCBB"))
+
+  ;; ;; Vertico: group titles/separators
+  ;; (with-eval-after-load 'vertico
+  ;;   (set-face-attribute 'vertico-group-title nil
+  ;;                       :foreground "#D8DEE9")
+  ;;   (set-face-attribute 'vertico-group-separator nil
+  ;;                       :foreground "#D8DEE9"))
+  )
 
 (use-package doom-modeline
   :defer t
@@ -735,6 +763,42 @@ parses its input."
 (setq vc-follow-symlinks t)
 
 ;; ==============================
+;; tabspaces
+;; ==============================
+
+(use-package tabspaces
+  :straight (:type git :host github :repo "mclear-tools/tabspaces")
+  :hook (after-init . tabspaces-mode)      ;; enable at startup
+  :custom
+  (tabspaces-use-filtered-buffers-as-default t)
+  (tabspaces-default-tab "Default")
+  (tabspaces-remove-to-default t)
+  (tabspaces-initialize-project-with-todo t) ;; don't auto-create project-todo.org
+  (tabspaces-session t)                        ;; optional session save
+  (tabspaces-session-auto-restore t))
+
+;; Consult source: workspace buffers by default, "b" to see all
+(with-eval-after-load 'consult
+  (consult-customize consult--source-buffer :hidden t :default nil)
+  (defvar consult--source-workspace
+    (list :name "Workspace Buffers" :narrow ?w :history 'buffer-name-history
+          :category 'buffer :state #'consult--buffer-state :default t
+          :items (lambda () (consult--buffer-query
+                             :predicate #'tabspaces--local-buffer-p
+                             :sort 'visibility :as #'buffer-name))))
+  (add-to-list 'consult-buffer-sources 'consult--source-workspace))
+
+;; A couple of useful commands on your Evil leader
+;; (assuming SPC is your leader via general.el)
+(general-define-key
+ :states '(normal visual) :prefix "SPC"
+ "t s" #'tabspaces-switch-or-create-workspace
+ "t o" #'tabspaces-open-or-create-project-and-workspace
+ "t b" #'tabspaces-switch-to-buffer
+ "t d" #'tabspaces-close-workspace
+ "t k" #'tabspaces-kill-buffers-close-workspace)
+
+;; ==============================
 ;; Dired
 ;; ==============================
 
@@ -753,6 +817,26 @@ parses its input."
     ;; "l" 'dired-single-buffer         # <=====
     " " 'nil
     ))
+
+;; ==============================
+;; Browsers
+;; ==============================
+
+(use-package eww
+  :ensure nil ; emacs built-in
+  :defer t
+  :config
+  (setq
+   shr-use-fonts  nil                                ; No special fonts
+   shr-use-colors nil                                ; No colors
+   shr-indentation 2                                 ; Left-side margin
+   shr-width 80                                      ; Fold text to 80 columns
+   eww-auto-rename-buffer 'url                       ; open url in new buffer
+   eww-download-directory
+   (expand-file-name "~/Downloads/eww-downloads")    ; keeps eww downloads separate
+   eww-use-external-browser-for-content-type
+   "\\`\\(video/\\|audio\\)"                         ; On GNU/Linux check your mimeapps.list
+   eww-search-prefix "https://duckduckgo.com/?q=")) 
 
 ;; ==============================
 ;; Shells and utilities
@@ -1557,6 +1641,7 @@ Also wire env + path mapping for container runs."
 (with-eval-after-load 'citre
   ;; Core nav
   (define-key goto-map (kbd "g") #'xref-find-definitions) ; SPC g g -> goto def (Citre via Xref)
+  (define-key goto-map (kbd "g") #'xref-go-back) ; SPC g g -> goto def (Citre via Xref)
   (define-key goto-map (kbd "b") #'citre-jump-back)       ; SPC g b -> jump back
   (define-key goto-map (kbd "r") #'xref-find-references)  ; SPC g r -> references
   (define-key goto-map (kbd "P") #'citre-peek)            ; SPC g P -> peek def
@@ -1580,7 +1665,7 @@ Also wire env + path mapping for container runs."
           (when entry
             (let ((api-key (plist-get entry :key)))
               (when (stringp api-key) api-key)))))
-  (setq gptel-default-model "gpt-5"
+  (setq gptel-default-model "gpt-5.1"
         gptel-temperature 0.7)
 
   ;; (require 'gptel-openai-extras) ; bundled with gptel
@@ -1611,7 +1696,7 @@ Also wire env + path mapping for container runs."
   :hook (org-mode . org-ai-mode)  ;; Enable org-ai in Org buffers
   :init
   (setq org-ai-auto-fill t)
-  (setq org-ai-default-chat-model "gpt-5"
+  (setq org-ai-default-chat-model "gpt-5.1"
         org-ai-directory (expand-file-name "org-ai" org-directory))
   (setq org-ai-openai-api-token
         (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
@@ -1648,13 +1733,80 @@ Also wire env + path mapping for container runs."
               (when (stringp api-key) api-key))))
 
         ;; Set the default model to o4-mini-high
-        aidermacs-default-model "gpt-5"
+        aidermacs-default-model "gpt-5.1-codex"
 
         ;; Optional: Adjust temperature if desired
         aidermacs-temperature 0.3)
+
+   ;; Start Aider at project root when possible
+  (setq aidermacs-default-directory
+        (when (project-current) (project-root (project-current))))
+
+  ;; --- Profiles ---
+  (defvar my/aider-args-propose
+    '("--no-auto-commits" "--dry-run" "--show-diffs" "--no-dirty-commits")
+    "Aider args for propose-only (no file writes, no commits).")
+
+  (defvar my/aider-args-apply
+    '("--no-auto-commits" "--show-diffs")
+    "Aider args for apply mode (writes allowed, still no auto-commits).")
+
+  (defvar my/aider-args-apply-clipboard
+    '("--no-auto-commits" "--apply-clipboard-edits")
+    "Aider args to apply a diff from the clipboard/kill-ring.")
+
+  (defvar my/aider-args-architect
+    '("--no-auto-commits" "--dry-run" "--show-diffs" "--architect" "--editor-edit-format=editor-diff")
+    "Aider args for architect (suggest-only) mode.")
+
+  ;; --- Launchers ---
+  (defun my/aider--start (args)
+    "Start Aidermacs with ARGS for this session."
+    (let ((aidermacs-args args))
+      (aidermacs-chat)))
+
+  (defun my/aider-propose ()            (interactive) (my/aider--start my/aider-args-propose))
+  (defun my/aider-apply ()              (interactive) (my/aider--start my/aider-args-apply))
+  (defun my/aider-apply-clipboard ()    (interactive) (my/aider--start my/aider-args-apply-clipboard))
+  (defun my/aider-architect ()          (interactive) (my/aider--start my/aider-args-architect))
+
+  ;; Quick “toggle”: restart the last session profile but flip dry-run on/off.
+  (defvar my/aider-last-args my/aider-args-propose)
+  (defun my/aider--remember (fn args) (setq my/aider-last-args args) (funcall fn))
+  (advice-add 'my/aider-propose         :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-propose)))
+  (advice-add 'my/aider-apply           :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-apply)))
+  (advice-add 'my/aider-apply-clipboard :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-apply-clipboard)))
+  (advice-add 'my/aider-architect       :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-architect)))
+
+  (defun my/aider-toggle-dry-run ()
+    "Restart Aider with the last args but toggled dry-run."
+    (interactive)
+    (let* ((args my/aider-last-args)
+           (has-dry (member "--dry-run" args))
+           (toggled (if has-dry (remove "--dry-run" args) (append args '("--dry-run")))))
+      (my/aider--start toggled)
+      (setq my/aider-last-args toggled)))
+
+  ;; Handy helpers
+  (defun my/aider-diff-last () (interactive) (call-interactively #'aidermacs-diff-last))
+  (defun my/aider-rewrite-region () (interactive) (call-interactively #'aidermacs-rewrite-region))
+
+  ;; --- Transient menu (SPC j A) ---
+  (transient-define-prefix my/aider-transient ()
+    "Aider control panel"
+    [["Sessions"
+      ("p" "Propose (dry-run)"           my/aider-propose)
+      ("w" "Write (apply, no commits)"   my/aider-apply)
+      ("c" "Apply clipboard diff"        my/aider-apply-clipboard)
+      ("r" "Architect (suggest-only)"    my/aider-architect)]
+     ["Actions"
+      ("d" "Show last diff"              my/aider-diff-last)
+      ("e" "Rewrite region"              my/aider-rewrite-region)
+      ("t" "Toggle dry-run & restart"    my/aider-toggle-dry-run)]])
+
   :config
   ;; You can define additional settings here if required by the aidermacs package
-  (setq aidermacs-history-max-length 50)  ;; Example: Keep a history of the last 50 interactions
+  (setq aidermacs-history-max-length 50)
   :general
   ;; Place both aidermacs and gptel keybindings under the SPACE-j prefix
   (:keymaps 'aidermacs-mode-map
@@ -1663,7 +1815,15 @@ Also wire env + path mapping for container runs."
 
   ;; Define SPACE-j bindings for both aidermacs and gptel
   (tyrant-def
-    "ja" '(aidermacs-transient-menu :which-key "Start Aider Menu")))
+    "ja" '(aidermacs-transient-menu :which-key "Start Aider Menu")
+    "jj" 'my/aider-propose          ;; default = propose-only (Codex-like)
+    "jw" 'my/aider-apply            ;; allow writes, still no auto-commit
+    "jc" 'my/aider-apply-clipboard  ;; apply exactly what's in clipboard
+    "jt" 'my/aider-toggle-dry-run   ;; fast flip
+    "jd" 'my/aider-diff-last
+    "je" 'my/aider-rewrite-region
+    "jA" 'my/aider-transient
+    ))
 
 (defun my/aidermacs-use (model)
   "Switch aidermacs model for this session."
@@ -1671,19 +1831,21 @@ Also wire env + path mapping for container runs."
   (setq aidermacs-default-model model)
   (message "aidermacs-default-model → %s" model))
 
-;; (use-package model-switcher
-;;   :commands (my/aidermacs-choose-model my/openai-refresh-models)
-;;   :after (aidermacs general)         ;; loads after your keybinding stack
-;;   :init
-;;   ;; (setq my/openai-base-url "https://api.openai.com/v1") ;; change if needed
-;;   :config
-;;   ;; If you *didn’t* keep the keybindings inside model-switcher.el,
-;;   ;; you can put them here instead:
-;;   ;; (when (fboundp 'tyrant-def)
-;;   ;;   (tyrant-def
-;;   ;;     "jm" '(my/aidermacs-choose-model :which-key "Choose Aider model")
-;;   ;;     "jM" '(my/openai-refresh-models :which-key "Refresh models")))
-;;   )
+(use-package model-switcher
+  :straight nil
+  :load-path "lisp"
+  :commands (my/aidermacs-choose-model my/openai-refresh-models)
+  :after (aidermacs general)
+  :init
+  ;; (setq my/openai-base-url "https://api.openai.com/v1") ;; change if needed
+  :config
+  ;; If you *didn’t* keep the keybindings inside model-switcher.el,
+  ;; you can put them here instead:
+  ;; (when (fboundp 'tyrant-def)
+  ;;   (tyrant-def
+  ;;     "jm" '(my/aidermacs-choose-model :which-key "Choose Aider model")
+  ;;     "jM" '(my/openai-refresh-models :which-key "Refresh models")))
+  )
 
 
 ;; ==============================
@@ -1718,6 +1880,46 @@ Also wire env + path mapping for container runs."
 
 (add-to-list 'auto-mode-alist '("\\.cjs\\'" . js-mode))
 (add-to-list 'auto-mode-alist '("\\.mjs\\'" . js-mode))
+
+;; --- Error regexps for both common tsc formats ---
+;;  1) path/file.ts(5,10): error TS1234: message
+;;  2) path/file.ts:5:10 - error TS1234: message
+(with-eval-after-load 'compile
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(tsc-paren
+                 "^\\([^(\n]+\\)(\\([0-9]+\\),\\([0-9]+\\)): error TS[0-9]+: .*$"
+                 1 2 3))
+  (add-to-list 'compilation-error-regexp-alist 'tsc-paren)
+
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(tsc-colon
+                 "^\\([^:\n]+\\.tsx?\\):\\([0-9]+\\):\\([0-9]+\\) - error TS[0-9]+: .*$"
+                 1 2 3))
+  (add-to-list 'compilation-error-regexp-alist 'tsc-colon))
+
+(defun my/tsc--project-root ()
+  (or (when-let ((pr (project-current))) (project-root pr))
+      default-directory))
+
+(defun my/tsc-compile (&optional no-cache)
+  "Run `yarn tsc --noEmit` at the project root with clickable errors.
+If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cache."
+  (interactive "P")
+  (let* ((default-directory (file-truename (my/tsc--project-root)))
+         ;; Prefer deterministic, parseable output
+         (cmd (string-join
+               (append
+                '("yarn")
+                (when no-cache '("--check-files")) ;; optional, Yarn v1: force re-resolve
+                '("tsc" "--noEmit" "--pretty" "false"))
+               " ")))
+    (compilation-start cmd 'compilation-mode (lambda (_) "*tsc*"))))
+
+;; Optional: bind it in TS buffers
+(with-eval-after-load 'typescript-ts-mode
+  (define-key typescript-ts-mode-map (kbd "C-c t") #'my/tsc-compile))
+(with-eval-after-load 'tsx-ts-mode
+  (define-key tsx-ts-mode-map (kbd "C-c t") #'my/tsc-compile))
 
 (use-package web-mode
   :mode

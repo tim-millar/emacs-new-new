@@ -233,39 +233,73 @@
 ;; Themes and appearance
 ;; ==============================
 
+;;;; Theme switching (doom-nord <-> doom-nord-light) + consistent tweaks
+
+(defvar my/theme-dark 'doom-nord)
+(defvar my/theme-light 'doom-nord-light)
+
+(defun my/apply-theme-tweaks ()
+  "Face tweaks that should persist across theme switches."
+  ;; Comments (brighter)
+  (set-face-attribute 'font-lock-comment-face nil :foreground "#9CAEC5")
+  (set-face-attribute 'font-lock-comment-delimiter-face nil :foreground "#9CAEC5")
+
+  ;; De-emphasized text (general)
+  (set-face-attribute 'shadow nil :foreground "#8C9BAA")
+
+  ;; Consult metadata (guarded: some faces vary by version)
+  (when (facep 'consult-annotation)
+    (set-face-attribute 'consult-annotation nil :foreground "#88C0D0"))
+  (when (facep 'consult-line-number)
+    (set-face-attribute 'consult-line-number nil :foreground "#616E88"))
+  (when (facep 'consult-file)
+    (set-face-attribute 'consult-file nil :foreground "#81A1C1"))
+
+  ;; Marginalia
+  (when (facep 'marginalia-documentation)
+    (set-face-attribute 'marginalia-documentation nil :foreground "#8FBCBB"))
+
+  ;; Vertico group headings in minibuffer (this is your consult-ripgrep "file headings")
+  (when (facep 'vertico-group-title)
+    (set-face-attribute 'vertico-group-title nil
+                        :foreground "#81A1C1"
+                        :weight 'semi-bold
+                        :slant 'italic))
+  (when (facep 'vertico-group-separator)
+    (set-face-attribute 'vertico-group-separator nil :foreground "#5E81AC")))
+
+(defun my/load-theme-clean (theme)
+  "Disable current themes, load THEME, then reapply my tweaks."
+  (mapc #'disable-theme custom-enabled-themes)
+  (load-theme theme t)
+  (my/apply-theme-tweaks))
+
+(defun my/theme-dark ()
+  (interactive)
+  (my/load-theme-clean my/theme-dark))
+
+(defun my/theme-light ()
+  (interactive)
+  (my/load-theme-clean my/theme-light))
+
+(defun my/toggle-theme ()
+  (interactive)
+  (if (member my/theme-dark custom-enabled-themes)
+      (my/theme-light)
+    (my/theme-dark)))
+
+(defun my/reapply-theme-tweaks ()
+  (interactive)
+  (my/apply-theme-tweaks))
+
+;; Optional: convenient key
+;; (global-set-key (kbd "<f6>") #'my/toggle-theme)
+
 (use-package doom-themes
   :config
-  (load-theme 'doom-nord t)
   (doom-themes-visual-bell-config)
   (doom-themes-org-config)
-
-  ;; brighter comments
-  (set-face-attribute 'font-lock-comment-face nil
-                      :foreground "#7F8C98")
-  (set-face-attribute 'font-lock-comment-delimiter-face nil
-                      :foreground "#7F8C98")
-
-  ;; de-emphasised text (used by many packages, incl. minibuffer hints)
-  (set-face-attribute 'shadow nil
-                      :foreground "#8C9BAA")
-
-  ;; ;; Consult: extra info (e.g. file names in consult-ripgrep)
-  ;; (with-eval-after-load 'consult
-  ;;   (set-face-attribute 'consult-annotation nil
-  ;;                       :foreground "#88C0D0"))
-
-  ;; ;; Marginalia: annotations in completion UI
-  ;; (with-eval-after-load 'marginalia
-  ;;   (set-face-attribute 'marginalia-documentation nil
-  ;;                       :foreground "#8FBCBB"))
-
-  ;; ;; Vertico: group titles/separators
-  ;; (with-eval-after-load 'vertico
-  ;;   (set-face-attribute 'vertico-group-title nil
-  ;;                       :foreground "#D8DEE9")
-  ;;   (set-face-attribute 'vertico-group-separator nil
-  ;;                       :foreground "#D8DEE9"))
-  )
+  (my/theme-dark))
 
 (use-package doom-modeline
   :defer t
@@ -617,9 +651,9 @@ parses its input."
   ;; (setq consult-preview-key '("S-<down>" "S-<up>"))
   ;; For some commands and buffer sources it is useful to configure the
   ;; :preview-key on a per-command basis using the `consult-customize' macro.
-  ;; (consult-customize
-  ;;  consult-ripgrep consult-git-grep consult-grep
-  ;;  :preview-key (kbd "C-.")))
+  (consult-customize
+   consult-ripgrep consult-git-grep consult-grep
+   :preview-key (kbd "C-."))
 
   (consult-customize
    consult-theme :preview-key '(:debounce 0.2 any)
@@ -629,7 +663,8 @@ parses its input."
    consult--source-recent-file consult--source-project-recent-file
    ;; :preview-key "M-."
    ;; :preview-key '(:debounce 0.4 any))
-   :preview-key (kbd "C-."))
+   :preview-key (kbd "C-.")
+   )
 
   ;; Optionally configure the narrowing key.
   ;; Both < and C-+ work reasonably well.
@@ -1723,9 +1758,9 @@ Also wire env + path mapping for container runs."
 
 (use-package aidermacs
   :straight (:host github :repo "MatthewZMD/aidermacs")
-  :commands (aidermacs-start aidermacs-send)
+  :commands (aidermacs-transient-menu aidermacs-run-aidermacs aidermacs-send-line-or-region)
   :init
-  ;; Use the provided code to retrieve the OpenAI API key
+
   (setq aidermacs-openai-api-token
         (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
           (when entry
@@ -1763,7 +1798,7 @@ Also wire env + path mapping for container runs."
   (defun my/aider--start (args)
     "Start Aidermacs with ARGS for this session."
     (let ((aidermacs-args args))
-      (aidermacs-chat)))
+      (aidermacs-run-aidermacs)))
 
   (defun my/aider-propose ()            (interactive) (my/aider--start my/aider-args-propose))
   (defun my/aider-apply ()              (interactive) (my/aider--start my/aider-args-apply))
@@ -1811,7 +1846,7 @@ Also wire env + path mapping for container runs."
   ;; Place both aidermacs and gptel keybindings under the SPACE-j prefix
   (:keymaps 'aidermacs-mode-map
             :states '(normal insert visual motion)
-            "C-<return>" 'aidermacs-send)  ;; Send input with Ctrl+Enter
+            "C-<return>" 'aidermacs-send-line-or-region)  ;; Send input with Ctrl+Enter
 
   ;; Define SPACE-j bindings for both aidermacs and gptel
   (tyrant-def
@@ -1951,127 +1986,154 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
   :defer t
   :hook (org-mode . visual-line-mode)
   :config
-  (setq org-directory "~/Documents/org")
+  ;; Core paths
+  (setq org-directory (expand-file-name "~/Documents/org")
+        my/org-tasks-file   (expand-file-name "tasks.org" org-directory)
+        my/org-links-file   (expand-file-name "links.org" org-directory)
+        my/org-journal-file (expand-file-name "journal.org" org-directory)
+        my/org-workout-file (expand-file-name "roam/fitness/workout-log.org" org-directory))
 
-  (setq org-agenda-files '("~/Documents/org/agenda.org"
-                           "~/Documents/org/notes.org"
-                           "~/Documents/org/ai-notes.org"
-                           "~/Documents/org/tasks.org"
-                           "~/Documents/org/ai-tasks.org"
-                           "~/Documents/org/ai-learning-plan.org"
-                           "~/Documents/org/journal.org"
-                           "~/Documents/org/roam"))
+  ;; Keep agenda tight: only the “systems of record”
+  (setq org-agenda-files (list my/org-tasks-file
+                               my/org-links-file
+                               my/org-journal-file
+                               my/org-workout-file))
 
-  (setq org-log-done 'time)  ;; Log timestamp when a task is marked DONE
-  (setq org-startup-indented t)  ;; Pretty indentation
-  (setq org-insert-heading-respect-content t)
-  (setq org-fold-catch-invisible-edits 'show-and-error)
-  (setq org-pretty-entities t)
-  (setq org-hide-emphasis-markers t)
+  ;; General UX
+  (setq org-log-done 'time
+        org-log-into-drawer t
+        org-startup-indented t
+        org-insert-heading-respect-content t
+        org-fold-catch-invisible-edits 'show-and-error
+        org-pretty-entities t
+        org-hide-emphasis-markers t
+        org-src-fontify-natively t)
 
-  ;; Enable syntax highlighting in code blocks
-  (setq org-src-fontify-natively t)
+  ;; TODO workflow: includes clean “noise control” states
+  (setq org-todo-keywords
+        '((sequence
+           "TODO(t)"   ; captured / not committed
+           "NEXT(n)"   ; actively chosen
+           "WAIT(w@/!)" ; blocked (log note+time)
+           "SOMEDAY(s)" ; intentionally out of the way
+           "|"
+           "DONE(d!)"
+           "CANCELLED(c@)")))
 
-  ;; Enable desired languages for code block evaluation
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   '((emacs-lisp . t)
-     (python     . t)
-     (js         . t)
-     (sql        . t)
-     (ruby       . t)
-     (css        . t)
-     (makefile   . t)
-     (mermaid    . t)
-     (shell      . t)))
+  ;; Make agenda less noisy:
+  ;; - Don't show SOMEDAY in agenda by default
+  ;; - Prefer showing NEXT/WAIТ
+  (setq org-agenda-todo-ignore-with-date nil
+        org-agenda-tags-todo-honor-ignore-options t)
 
-  (setq org-agenda-start-on-weekday nil
-        org-agenda-span 'week
-        org-deadline-warning-days 7)
+  ;; Quick refile: only into top-level tracks in tasks.org (and Archive)
+  (setq org-refile-use-outline-path 'file
+        org-outline-path-complete-in-steps nil
+        org-refile-allow-creating-parent-nodes 'confirm
+        org-refile-targets
+        `((,my/org-tasks-file :maxlevel . 2)))
 
-  (setq org-agenda-custom-commands
-        '(("c" "Custom Agenda"
-           ((agenda "")
-            (todo "NEXT")
-            (tags "project")))
+  ;; Optional: a simple archive location (keeps tasks file tidy)
+  (setq org-archive-location (concat my/org-tasks-file "::Archive"))
 
-          ;; View All TODOs (General + AI, Scheduled + Unscheduled)
-          ("T" "All TODOs"
-           ((todo "TODO")))
-
-          ;; General TODOs Only (Excludes AI)
-          ("g" "General TODOs (Non-AI)"
-           ((tags-todo "-ai")))
-
-          ;; AI-related TODOs Only
-          ("a" "AI TODOs"
-           ((tags-todo "ai")))
-
-          ;; Scheduled Tasks Only
-          ("s" "Scheduled Tasks"
-           ((agenda "" ((org-agenda-entry-types '(:scheduled))))))
-
-          ;; Unscheduled Tasks Only
-          ("u" "Unscheduled Tasks"
-           ((todo "TODO"
-                  ((org-agenda-todo-ignore-scheduled 'all)
-                   (org-agenda-todo-ignore-deadlines 'all)))))))
-
-  (setq org-habit-graph-column 60)
-
-  ;; Org Capture
+  ;; Capture templates (fast, low-friction)
   (setq org-capture-templates
-        '(;; General Tasks
-          ("t" "Task" entry
-           (file+headline "~/Documents/org/tasks.org" "Backlog")
-           "* TODO %?\n  %u\n  %a")
+        `(
+          ;; 1) Default: capture tasks into Inbox (no thinking)
+          ("t" "Task → Inbox" entry
+           (file+headline ,my/org-tasks-file "Inbox")
+           "* TODO %?\n  %U\n  %a"
+           :empty-lines 1)
 
-          ;; Scheduled Tasks
+          ;; 2) If you already know it's “Today”
+          ("T" "Task → Today" entry
+           (file+headline ,my/org-tasks-file "Today")
+           "* NEXT %?\n  %U\n  %a"
+           :empty-lines 1)
+
+          ;; 3) Scheduled task (prompts for date)
           ("s" "Scheduled Task" entry
-           (file+headline "~/Documents/org/tasks.org" "Scheduled Tasks")
-           "* TODO %?\nSCHEDULED: %^t\n  %u\n  %a")
+           (file+headline ,my/org-tasks-file "Inbox")
+           "* TODO %?\nSCHEDULED: %^t\n  %U\n  %a"
+           :empty-lines 1)
 
-          ;; Notes
-          ("n" "Note" entry (file+headline "~/Documents/org/notes.org" "Notes")
-           "* %?\n  %u\n  %a")
+          ;; 4) Link capture (“open tabs”)
+          ;; Captures title + url via %a; you can tag quickly (read/watch/buy/etc.)
+          ("l" "Link → Read Later" entry
+           (file+headline ,my/org-links-file "Read Later")
+           "* TODO %?  %^g\n  %U\n  %a"
+           :empty-lines 1)
 
-          ;; Journal
-          ("j" "Journal" entry (file+datetree "~/Documents/org/journal.org")
-           "* %?\nEntered on %U")
+          ;; 5) Journal (datetree)
+          ("j" "Journal" entry
+           (file+datetree ,my/org-journal-file)
+           "* %?\nEntered on %U"
+           :empty-lines 1)
 
-          ;; AI Tasks
-          ("a" "AI Task" entry
-           (file+headline "~/Documents/org/ai-tasks.org" "AI Learning Tasks")
-           "* TODO %? :ai:\n  %u\n  Linked to: [[file:ai-learning-plan.org::*%^{Topic}]]\n  %a")
-          
-          ;; Scheduled AI Tasks
-          ("A" "Scheduled AI Task" entry
-           (file+headline "~/Documents/org/ai-tasks.org" "Scheduled AI Learning Tasks")
-           "* TODO %? :ai:\nSCHEDULED: %t\n:PROPERTIES:\n:ID: %U\n:END:\nLinked to: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
-
-          ("l" "AI Note" entry
-           (file+headline "~/Documents/org/ai-notes.org" "AI Notes")
-           "* %? :ai:\nEntered on %U\n\nRelated to: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
-
-          ("p" "AI Journal Entry" entry
-           (file+datetree "~/Documents/org/journal.org")
-           "* %? :ai:\nEntered on %U\n\nProgress on AI Learning: [[file:ai-learning-plan.org::*%^{Topic}]]\n")
-
-          ;; Fitness stuff
-          ("w" "💪 Daily Workout Log"
-           entry
-           (file+datetree "~/Documents/org/roam/fitness/workout-log.org")
+          ;; 6) Your existing workout log
+          ("w" "💪 Daily Workout Log" entry
+           (file+datetree ,my/org-workout-file)
            "* %<%Y-%m-%d> Daily Workout\n\n%?"
            :empty-lines 1)
           ))
 
-  ;; Org Refile Settings
-  (setq org-refile-targets '((("~/org/ai-learning-plan.org") :maxlevel . 2)
-                             (("~/org/ai-tasks.org") :maxlevel . 2)
-                             (("~/org/tasks.org") :maxlevel . 2)
-                             (("~/org/ai-notes.org") :maxlevel . 2)
-                             (("~/org/notes.org") :maxlevel . 2)
-                             (("~/org/journal.org") :maxlevel . 2))))
+  ;; Agenda: make it feel like your notebook list
+  (setq org-agenda-start-on-weekday nil
+        org-agenda-span 1
+        org-deadline-warning-days 7)
+
+  (setq org-agenda-custom-commands
+        '(
+          ;; Daily dashboard: schedule + chosen next actions + a tiny Inbox triage section
+          ("d" "Daily Dashboard"
+           ((agenda ""
+                    ((org-agenda-span 1)
+                     (org-agenda-overriding-header "Schedule & Deadlines")))
+
+            (todo "NEXT"
+                  ((org-agenda-overriding-header "Next Actions")
+                   (org-agenda-todo-ignore-scheduled 'future)
+                   (org-agenda-todo-ignore-deadlines 'future)))
+
+            (todo "WAIT"
+                  ((org-agenda-overriding-header "Waiting / Blocked")))
+
+            ;; Inbox triage: show TODOs tagged with nothing special (still in Inbox)
+            (tags-todo "+LEVEL=2+TODO=\"TODO\""
+                       ((org-agenda-overriding-header "Inbox (triage)")
+                        (org-agenda-files (list my/org-tasks-file))
+                        ;; Limit to items under Inbox by matching the heading path
+                        (org-agenda-skip-function
+                         '(org-agenda-skip-entry-if 'notregexp "\\`\\*\\* TODO"))))
+            ))
+
+          ;; All open tasks (excluding SOMEDAY)
+          ("a" "All Active Tasks"
+           ((todo "TODO|NEXT|WAIT"
+                  ((org-agenda-overriding-header "Active Tasks")))))
+
+          ;; Read later (links)
+          ("r" "Read Later"
+           ((tags-todo "Read Later"
+                      ((org-agenda-files (list my/org-links-file))
+                       (org-agenda-overriding-header "Read / Watch / Buy Queue")))))
+
+          ;; Someday list (intentionally separate)
+          ("S" "Someday"
+           ((todo "SOMEDAY"
+                  ((org-agenda-overriding-header "Someday / Later")))))
+          ))
+
+  ;; Quality-of-life: a couple of helper commands
+  (defun my/org-cancel-task ()
+    "Mark current item CANCELLED with a note."
+    (interactive)
+    (org-todo 'CANCELLED))
+
+  (defun my/org-someday ()
+    "Mark current item SOMEDAY."
+    (interactive)
+    (org-todo 'SOMEDAY)))
 
 (use-package evil-org
   :after org
@@ -2186,7 +2248,8 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
    ;; Eventually suppress previewing for certain functions
    (consult-customize
     consult-org-roam-forward-links
-    :preview-key "M-."))
+    :preview-key "M-.")
+   )
 
 (use-package ob-mermaid
   ;; :defer t
@@ -2412,30 +2475,38 @@ or directly if not."
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(custom-safe-themes
+   '("571661a9d205cb32dfed5566019ad54f5bb3415d2d88f7ea1d00c7c794e70a36"
+     "34cf3305b35e3a8132a0b1bdf2c67623bc2cb05b125f8d7d26bd51fd16d547ec"
+     "9013233028d9798f901e5e8efb31841c24c12444d3b6e92580080505d56fd392"
+     "7964b513f8a2bb14803e717e0ac0123f100fb92160dcf4a467f530868ebaae3e"
+     "7c28419e963b04bf7ad14f3d8f6655c078de75e4944843ef9522dbecfcd8717d"
+     default))
  '(package-selected-packages
-   '(dumb-jump lsp-mode eglot flycheck-eglot direnv yaml-mode dockerfile-mode add-node-modules-path all-the-icons-completion all-the-icons-dired cape consult corfu doom-modeline doom-themes embark embark-consult evil-collection evil-escape exec-path-from-shell flycheck general git-timemachine magit marginalia orderless php-mode rvm terraform-mode vertico which-key writeroom-mode))
+   '(dumb-jump lsp-mode eglot flycheck-eglot direnv yaml-mode
+               dockerfile-mode add-node-modules-path
+               all-the-icons-completion all-the-icons-dired cape
+               consult corfu doom-modeline doom-themes embark
+               embark-consult evil-collection evil-escape
+               exec-path-from-shell flycheck general git-timemachine
+               magit marginalia orderless php-mode rvm terraform-mode
+               vertico which-key writeroom-mode))
  '(safe-local-variable-values
    '((flycheck-javascript-eslint-args "--no-eslintrc")
      (eval let*
-           ((pr
-             (project-current))
-            (root
-             (if pr
-                 (project-root pr)
-               default-directory))
-            (host-root
-             (directory-file-name
-              (file-truename root))))
+           ((pr (project-current))
+            (root (if pr (project-root pr) default-directory))
+            (host-root (directory-file-name (file-truename root))))
            (setq-local flycheck-javascript-eslint-executable
                        (expand-file-name "~/bin/eslint-in-docker"))
            (setq-local process-environment
                        (append
-                        (list "ESLINT_SERVICE=web" "ESLINT_WORKDIR=/usr/src/app"
+                        (list "ESLINT_SERVICE=web"
+                              "ESLINT_WORKDIR=/usr/src/app"
                               (concat "HOST_ROOT=" host-root))
                         process-environment))
            (setq-local flycheck-substitute-paths
-                       (list
-                        (cons "/usr/src/app" host-root)))))))
+                       (list (cons "/usr/src/app" host-root)))))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

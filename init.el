@@ -8,10 +8,10 @@
 
 ;; Profile emacs startup
 (add-hook 'emacs-startup-hook
-	  (lambda ()
-	    (message "*** Emacs loaded in %s seconds with %d garbage collections."
-		     (emacs-init-time "%.2f")
-		     gcs-done)))
+    (lambda ()
+      (message "*** Emacs loaded in %s seconds with %d garbage collections."
+         (emacs-init-time "%.2f")
+         gcs-done)))
 
 (setq inhibit-splash-screen t)
 
@@ -111,8 +111,8 @@
 
 (fset 'yes-or-no-p 'y-or-n-p)
 (add-hook 'kill-emacs-query-functions
-	  (lambda () (y-or-n-p "Do you really want to exit Emacs? "))
-	  'append)
+    (lambda () (y-or-n-p "Do you really want to exit Emacs? "))
+    'append)
 
 (setq byte-compile-warnings '(not docstrings))
 
@@ -128,13 +128,13 @@
 (use-package general
   :init
   (setq general-override-states '(insert
-				  emacs
-				  hybrid
-				  normal
-				  visual
-				  motion
-				  operator
-				  replace))
+          emacs
+          hybrid
+          normal
+          visual
+          motion
+          operator
+          replace))
   :config
   (general-create-definer tyrant-def
    :states '(normal visual insert emacs)
@@ -167,7 +167,8 @@
    "b/" 'split-window-horizontally
    "bd" 'dired-jump
    "br" 'my/rubocop-autocorrect
-   ;; "by" 'show-buffer-file-name
+   "by" 'my/copy-file-path-relative-to-project
+   "bY" 'my/copy-file-path-with-line
    "be" 'my/eshell-here
    "bf" 'fill-region
 
@@ -197,28 +198,32 @@
    ;; "gG" 'dumb-jump-back
   )
 
-  (tyrant-def
-    ;; Org Agenda and Capture
-    "oa" '(org-agenda :which-key "org-agenda")
-    "oc" '(org-capture :which-key "org-capture")
-    ;; Org-QL commands
-    "oq" '(:ignore t :which-key "org-queries")
-    "oqn" '(my/org-ql-ai-notes :which-key "org-ql-ai-notes")
-    "oqN" '(my/org-ql-general-notes :which-key "org-ql-general-notes")
-    "oqj" '(my/org-ql-journal-entries :which-key "org-ql-journal-entries")
-    "oqt" '(my/org-ql-outstanding-todos :which-key "org-ql-outstanding-todos")
-    "oqg" 'org-tags-view
-    ;; Org Roam commands grouped under "or"
-    "or" '(:ignore t :which-key "org-roam")
-    "orc" '(org-roam-capture :which-key "org-roam capture")
-    "orf" '(consult-org-roam-file-find :which-key "org-roam file find")
-    "ori" '(org-roam-node-insert :which-key "org-roam node insert")
-    "ort" '(org-roam-buffer-toggle :which-key "org-roam buffer toggle")
-    "orb" '(consult-org-roam-backlinks :which-key "org-roam backlinks")
-    "orB" '(consult-org-roam-backlinks-recursive :which-key "org-roam backlinks recursive")
-    "orl" '(consult-org-roam-forward-links :which-key "org-roam forward links")
-    "orr" '(consult-org-roam-search :which-key "org-roam search")
-    )
+(tyrant-def
+  ;; Org main entry points
+  "oa" '(org-agenda :which-key "org-agenda")
+  "oc" '(org-capture :which-key "org-capture")
+
+  ;; Org-QL (keep it available, but not in your face)
+  "oq" '(:ignore t :which-key "org-ql")
+  "oqq" '(org-ql-search :which-key "search")
+  "oqv" '(org-ql-view :which-key "views")
+  ;; keep your custom QL functions if you want:
+  "oqn" '(my/org-ql-ai-notes :which-key "ai notes")
+  "oqN" '(my/org-ql-general-notes :which-key "notes")
+  "oqj" '(my/org-ql-journal-entries :which-key "journal")
+  "oqt" '(my/org-ql-outstanding-todos :which-key "todos")
+  "oqg" '(org-tags-view :which-key "tags view")
+
+  ;; Org Roam under "or" (unchanged)
+  "or" '(:ignore t :which-key "org-roam")
+  "orc" '(org-roam-capture :which-key "capture")
+  "orf" '(consult-org-roam-file-find :which-key "file find")
+  "ori" '(org-roam-node-insert :which-key "insert")
+  "ort" '(org-roam-buffer-toggle :which-key "buffer")
+  "orb" '(consult-org-roam-backlinks :which-key "backlinks")
+  "orB" '(consult-org-roam-backlinks-recursive :which-key "backlinks recursive")
+  "orl" '(consult-org-roam-forward-links :which-key "forward links")
+  "orr" '(consult-org-roam-search :which-key "search"))
 
   (general-define-key
    :keymaps 'tab-prefix-map
@@ -333,8 +338,8 @@
   :config
   (which-key-setup-side-window-bottom)
   (setq which-key-sort-order 'which-key-key-order-alpha
-	which-key-side-window-max-width 0.33
-	which-key-idle-delay 0.75))
+  which-key-side-window-max-width 0.33
+  which-key-idle-delay 0.75))
 
 ;; evil config
 ;; ==============================
@@ -397,22 +402,22 @@
 
   ;; Configure Vertico behavior
   (setq vertico-resize t          ; Grow and shrink minibuffer
-	vertico-cycle t)          ; Enable cycling through candidates
+  vertico-cycle t)          ; Enable cycling through candidates
 
   ;; Workaround for `tramp` hostname completions
   (defun kb/basic-remote-try-completion (string table pred point)
     (and (vertico--remote-p string)
-	 (completion-basic-try-completion string table pred point)))
+   (completion-basic-try-completion string table pred point)))
   (defun kb/basic-remote-all-completions (string table pred point)
     (and (vertico--remote-p string)
-	 (completion-basic-all-completions string table pred point)))
+   (completion-basic-all-completions string table pred point)))
   (defun kb/vertico-quick-embark (&optional arg)
     "Embark on candidate using quick keys."
     (interactive)
     (when (vertico-quick-jump)
       (embark-act arg)))
   (add-to-list 'completion-styles-alist
-	       '(basic-remote kb/basic-remote-try-completion kb/basic-remote-all-completions nil))
+         '(basic-remote kb/basic-remote-try-completion kb/basic-remote-all-completions nil))
 
   :bind
   (("C-c c" . vertico-repeat)
@@ -445,9 +450,9 @@
   :straight nil  ; Part of vertico, no need to install separately
   :after vertico
   :bind (:map vertico-map
-	      ("<backspace>" . vertico-directory-delete-char)
-	      ("C-w" . vertico-directory-delete-word)
-	      ("RET" . vertico-directory-enter))
+        ("<backspace>" . vertico-directory-delete-char)
+        ("C-w" . vertico-directory-delete-word)
+        ("RET" . vertico-directory-enter))
   :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
 
 ;; Persist history over Emacs restarts. Vertico sorts by history position.
@@ -462,16 +467,16 @@
   ;; We display [CRM<separator>], e.g., [CRM,] if the separator is a comma.
   (defun crm-indicator (args)
     (cons (format "[CRM%s] %s"
-		  (replace-regexp-in-string
-		   "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
-		   crm-separator)
-		  (car args))
-	  (cdr args)))
+      (replace-regexp-in-string
+       "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+       crm-separator)
+      (car args))
+    (cdr args)))
   (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
 
   ;; Do not allow the cursor in the minibuffer prompt
   (setq minibuffer-prompt-properties
-	'(read-only t cursor-intangible t face minibuffer-prompt))
+  '(read-only t cursor-intangible t face minibuffer-prompt))
   (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
   ;; Emacs 28: Hide commands in M-x which do not work in the current mode.
@@ -489,8 +494,8 @@
   ;; (setq orderless-style-dispatchers '(+orderless-consult-dispatch orderless-affix-dispatch)
   ;;       orderless-component-separator #'orderless-escapable-split-on-space)
   (setq completion-styles '(orderless basic)
-	completion-category-defaults nil
-	completion-category-overrides '((file (styles partial-completion))))
+  completion-category-defaults nil
+  completion-category-overrides '((file (styles partial-completion))))
 
   (defun orderless--strict-*-initialism (component &optional anchored)
     "Match a COMPONENT as a strict initialism, optionally ANCHORED.
@@ -504,11 +509,11 @@ the first word of the candidate.  If ANCHORED is `both' require
 that the first and last initials appear in the first and last
 words of the candidate, respectively."
     (orderless--separated-by
-	'(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)))
+  '(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)))
       (cl-loop for char across component collect `(seq word-start ,char))
       (when anchored '(seq (group buffer-start) (zero-or-more (not alpha))))
       (when (eq anchored 'both)
-	'(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)) eol))))
+  '(seq (zero-or-more alpha) word-end (zero-or-more (not alpha)) eol))))
 
   (defun orderless-strict-initialism (component)
     "Match a COMPONENT as a strict initialism.
@@ -563,60 +568,60 @@ parses its input."
 (use-package consult
   ;; Replace bindings. Lazily loaded due by `use-package'.
   :bind (;; C-c bindings in `mode-specific-map'
-	 ("C-c M-x" . consult-mode-command)
-	 ("C-c h" . consult-history)
-	 ("C-c k" . consult-kmacro)
-	 ("C-c m" . consult-man)
-	 ("C-c i" . consult-info)
-	 ([remap Info-search] . consult-info)
-	 ;; C-x bindings in `ctl-x-map'
-	 ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
-	 ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
-	 ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
-	 ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
-	 ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
-	 ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
-	 ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-	 ;; Custom M-# bindings for fast register access
-	 ("M-#" . consult-register-load)
-	 ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
-	 ("C-M-#" . consult-register)
-	 ;; Other custom bindings
-	 ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+   ("C-c M-x" . consult-mode-command)
+   ("C-c h" . consult-history)
+   ("C-c k" . consult-kmacro)
+   ("C-c m" . consult-man)
+   ("C-c i" . consult-info)
+   ([remap Info-search] . consult-info)
+   ;; C-x bindings in `ctl-x-map'
+   ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+   ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+   ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+   ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+   ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
+   ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+   ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
+   ;; Custom M-# bindings for fast register access
+   ("M-#" . consult-register-load)
+   ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+   ("C-M-#" . consult-register)
+   ;; Other custom bindings
+   ("M-y" . consult-yank-pop)                ;; orig. yank-pop
    ("C-c y" . consult-yank-from-kill-ring)
-	 ;; M-g bindings in `goto-map'
-	 ("M-g e" . consult-compile-error)
-	 ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
-	 ("M-g l" . consult-goto-line)             ;; orig. goto-line
-	 ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
-	 ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
-	 ("M-g m" . consult-mark)
-	 ("M-g k" . consult-global-mark)
-	 ("M-g i" . consult-imenu)
-	 ("M-g I" . consult-imenu-multi)
-	 ;; M-s bindings in `search-map'
-	 ("M-s d" . consult-find)                  ;; Alternative: consult-fd
-	 ("M-s c" . consult-locate)
-	 ("M-s f" . consult-fd)
-	 ("M-s G" . consult-grep)
-	 ("M-s g" . consult-git-grep)
-	 ("M-s s" . consult-ripgrep)
-	 ("M-s l" . consult-line)
-	 ("M-s L" . consult-line-multi)
-	 ("M-s k" . consult-keep-lines)
-	 ("M-s u" . consult-focus-lines)
-	 ;; Isearch integration
-	 ("M-s e" . consult-isearch-history)
-	 :map isearch-mode-map
-	 ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
-	 ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
-	 ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-	 ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
-	 ;; Minibuffer history
-	 :map minibuffer-local-map
+   ;; M-g bindings in `goto-map'
+   ("M-g e" . consult-compile-error)
+   ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+   ("M-g l" . consult-goto-line)             ;; orig. goto-line
+   ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+   ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+   ("M-g m" . consult-mark)
+   ("M-g k" . consult-global-mark)
+   ("M-g i" . consult-imenu)
+   ("M-g I" . consult-imenu-multi)
+   ;; M-s bindings in `search-map'
+   ("M-s d" . consult-find)                  ;; Alternative: consult-fd
+   ("M-s c" . consult-locate)
+   ("M-s f" . consult-fd)
+   ("M-s G" . consult-grep)
+   ("M-s g" . consult-git-grep)
+   ("M-s s" . consult-ripgrep)
+   ("M-s l" . consult-line)
+   ("M-s L" . consult-line-multi)
+   ("M-s k" . consult-keep-lines)
+   ("M-s u" . consult-focus-lines)
+   ;; Isearch integration
+   ("M-s e" . consult-isearch-history)
+   :map isearch-mode-map
+   ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+   ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+   ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+   ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+   ;; Minibuffer history
+   :map minibuffer-local-map
    ("M-i" . my/consult-insert-word-at-point)
-	 ("M-s" . consult-history)                 ;; orig. next-matching-history-element
-	 ("M-r" . consult-history))                ;; orig. previous-matching-history-element
+   ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+   ("M-r" . consult-history))                ;; orig. previous-matching-history-element
 
   ;; Enable automatic preview at point in the *Completions* buffer. This is
   ;; relevant when you use the default completion UI.
@@ -706,7 +711,7 @@ parses its input."
   ;; available in the *Completions* buffer, add it to the
   ;; `completion-list-mode-map'.
   :bind (:map minibuffer-local-map
-	 ("M-A" . marginalia-cycle))
+   ("M-A" . marginalia-cycle))
 
   ;; The :init section is always executed.
   :init
@@ -746,9 +751,9 @@ parses its input."
 
   ;; Hide the mode line of the Embark live/completions buffers
   (add-to-list 'display-buffer-alist
-	       '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
-		 nil
-		 (window-parameters (mode-line-format . none)))))
+         '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+     nil
+     (window-parameters (mode-line-format . none)))))
 
 (use-package corfu
   :init
@@ -768,8 +773,8 @@ parses its input."
    "M-l" #'corfu-info-location)
   :config
   (setq corfu-auto t
-	corfu-auto-prefix 1
-	corfu-count 20))
+  corfu-auto-prefix 1
+  corfu-count 20))
 
 ;; Install and configure cape
 (use-package cape
@@ -841,12 +846,12 @@ parses its input."
   :straight nil
   :config
   (setq dired-recursive-copies 'always
-	dired-recursive-deletes 'top
-	dired-dwim-target t
-	dired-use-ls-dired nil)
+  dired-recursive-deletes 'top
+  dired-dwim-target t
+  dired-use-ls-dired nil)
   (add-hook 'dired-mode-hook
-	    (lambda ()
-	      (dired-hide-details-mode t)))
+      (lambda ()
+        (dired-hide-details-mode t)))
   (evil-collection-define-key 'normal 'dired-mode-map
     ;; "h" 'dired-single-up-directory   # <=====
     ;; "l" 'dired-single-buffer         # <=====
@@ -871,7 +876,7 @@ parses its input."
    (expand-file-name "~/Downloads/eww-downloads")    ; keeps eww downloads separate
    eww-use-external-browser-for-content-type
    "\\`\\(video/\\|audio\\)"                         ; On GNU/Linux check your mimeapps.list
-   eww-search-prefix "https://duckduckgo.com/?q=")) 
+   eww-search-prefix "https://duckduckgo.com/?q="))
 
 ;; ==============================
 ;; Shells and utilities
@@ -1008,7 +1013,7 @@ multiple eshell windows easier."
          (command "bundle exec rake environment:console")
          (interactive-flag "--interactive")
          (buffer-name "*ecs-pry*")
-         
+
          ;; AWS credentials from environment variables
          (aws-env (format "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
                           (getenv "AWS_ACCESS_KEY_ID")
@@ -1052,7 +1057,7 @@ multiple eshell windows easier."
           (unless (comint-check-proc (current-buffer))
             (make-comint-in-buffer "ecs-pry" (current-buffer) "sh" nil "-c" ecs-command))
           (display-buffer (current-buffer)))
-        
+
         (message "Connected to ECS Pry session on container: %s" container-name)))))
 
 (defun my/aws-set-credentials ()
@@ -1070,8 +1075,10 @@ multiple eshell windows easier."
 (set-register ?e (cons 'file "~/.emacs.vertico/init.el"))
 (set-register ?z (cons 'file "~/.zshrc"))
 (set-register ?g (cons 'file "~/Documents/org/general.org"))
+(set-register ?m (cons 'file "/Users/timmillar/Documents/org/roam/mysticism-and-philosophy/mystical-reading-plan-6-months.org"))
 (set-register ?n (cons 'file "~/Documents/org/notes.org"))
-(set-register ?a (cons 'file "~/Documents/org/ai-learning-plan.org"))
+(set-register ?p (cons 'file "/Users/timmillar/Documents/org/roam/geopolitics/reading-plan/twelve-month-geopolitics-mysticism-reading-rule.org"))
+(set-register ?a (cons 'file "~/Documents/org/roam/ai/ai-learning-loop.org"))
 (set-register ?d (cons 'file "~/Downloads"))
 
 ;; ==============================
@@ -1165,6 +1172,14 @@ multiple eshell windows easier."
   :after add-node-modules-path
   :init
   (global-flycheck-mode))
+
+(with-eval-after-load 'flycheck
+  (defun my/flycheck-chain-lsp-to-eslint ()
+    (when (flycheck-valid-checker-p 'lsp)
+      (flycheck-add-next-checker 'lsp '(warning . javascript-eslint))))
+  (my/flycheck-chain-lsp-to-eslint)
+  (with-eval-after-load 'lsp-mode
+    (my/flycheck-chain-lsp-to-eslint)))
 
 ;; flycheck debugging functions
 ;; ==============================
@@ -1318,7 +1333,7 @@ multiple eshell windows easier."
           (setq-local flycheck-substitute-paths (list (cons "/usr/src/app" host-root))))
       (setq-local flycheck-substitute-paths nil))))
 
-(dolist (h '(js-ts-mode-hook tsx-ts-mode-hook typescript-ts-mode-hook json-ts-mode-hook))
+(dolist (h '(js-mode-hook js-ts-mode-hook tsx-ts-mode-hook typescript-ts-mode-hook json-ts-mode-hook))
   (add-hook h #'my/js-pick-eslint 'append))
 
 (defun my/eslint-toggle-container ()
@@ -1398,10 +1413,13 @@ Also wire env + path mapping for container runs."
 (use-package apheleia
   :init
   (setq apheleia-mode-alist
-        '((js-ts-mode . prettier) (tsx-ts-mode . prettier)
+        '((js-ts-mode . prettier)
+          (tsx-ts-mode . prettier)
           (typescript-ts-mode . prettier) ; or biome
+          (js-mode . prettier)
           (ruby-ts-mode . rubocop)        ; or standardrb
           (elixir-ts-mode . mix-format)   ; mix format
+          (python-mode . black)
           (sql-mode . pgformatter)))
   :config (apheleia-global-mode +1))
 
@@ -1415,8 +1433,8 @@ Also wire env + path mapping for container runs."
 (use-package lsp-mode
   :hook
   ((ruby-mode . lsp)
-	 (python-mode . lsp)
-	 (js-mode . lsp))
+   (python-mode . lsp)
+   (js-mode . lsp))
   :commands lsp lsp-deferred
   :init
   ;; Enable LSP features
@@ -1427,7 +1445,7 @@ Also wire env + path mapping for container runs."
   (setq read-process-output-max (* 1024 1024)) ;; 1mb
   ;; Configure Ruby language server
   (setq lsp-solargraph-use-bundler nil
-	lsp-solargraph-diagnostics t)
+  lsp-solargraph-diagnostics t)
   (setq lsp-completion-provider :none
         lsp-idle-delay 0.0
         lsp-enable-snippet t)
@@ -1882,6 +1900,68 @@ Also wire env + path mapping for container runs."
   ;;     "jM" '(my/openai-refresh-models :which-key "Refresh models")))
   )
 
+;; ==============================
+;; agent-shell (Codex via ACP)
+;; ==============================
+
+(defun my/openai-api-key-from-auth-source ()
+  "Return OpenAI API key from auth-source entry for host openai.com."
+  (let ((entry (car (auth-source-search :host "openai.com"
+                                        :max 1
+                                        :require '(:key)))))
+    (when entry
+      (let ((api-key (plist-get entry :key)))
+        (when (stringp api-key) api-key)))))
+
+;; ==============================
+;; agent-shell deps (straight recipes)
+;; ==============================
+
+(use-package shell-maker
+  :straight (:host github :repo "xenodium/shell-maker"))
+
+(use-package acp
+  :straight (:host github :repo "xenodium/acp.el" :local-repo "acp.el"))
+
+(use-package agent-shell
+  :straight (:host github :repo "xenodium/agent-shell")
+  :after (acp shell-maker)
+  :commands (agent-shell agent-shell-openai-start-codex)
+  :init
+  ;; API key auth
+  (setq agent-shell-openai-authentication
+        (agent-shell-openai-make-authentication
+         :api-key #'my/openai-api-key-from-auth-source))
+  ;; Gemini auth (login-based is the documented default)
+  (setq agent-shell-google-authentication
+        (agent-shell-google-make-authentication :login t))
+
+  ;; Inherit env so PATH includes codex-acp / your wrapper scripts
+  (setq agent-shell-openai-codex-environment
+        (agent-shell-make-environment-variables :inherit-env t))
+  (setq agent-shell-google-gemini-environment
+        (agent-shell-make-environment-variables :inherit-env t))
+  (setq agent-shell-github-environment
+        (agent-shell-make-environment-variables :inherit-env t))
+
+  (setq agent-shell-google-gemini-acp-command
+        '("gemini" "--experimental-acp" "--model" "auto"))
+
+  ;; Keep agent selection focused
+  (setq agent-shell-preferred-agent-config
+        (agent-shell-openai-make-codex-config))
+
+  :config
+  ;; Ctrl+Enter submits (shell-maker)
+  (define-key agent-shell-mode-map (kbd "C-<return>") #'shell-maker-submit)
+
+  :general
+  (with-eval-after-load 'general
+    (tyrant-def
+      "jS" '(agent-shell :which-key "Agent shell")
+      "jC" '(agent-shell-openai-start-codex :which-key "Codex (agent-shell)"))))
+
+
 
 ;; ==============================
 ;; Software Development / Programming Language Specific
@@ -1962,11 +2042,11 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
    ("\\.html?" . web-mode))
   :init
   (setq web-mode-code-indent-offset 2
-	      web-mode-css-indent-offset 2
-	      web-mode-enable-css-colorization t
-	      web-mode-markup-indent-offset 2
-	      web-mode-script-padding 2
-	      web-mode-style-padding 2))
+        web-mode-css-indent-offset 2
+        web-mode-enable-css-colorization t
+        web-mode-markup-indent-offset 2
+        web-mode-script-padding 2
+        web-mode-style-padding 2))
 
 (use-package markdown-mode
   :mode ("README\\.md\\'" . gfm-mode)
@@ -2038,44 +2118,43 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
 
   ;; Capture templates (fast, low-friction)
   (setq org-capture-templates
-        `(
-          ;; 1) Default: capture tasks into Inbox (no thinking)
-          ("t" "Task → Inbox" entry
-           (file+headline ,my/org-tasks-file "Inbox")
-           "* TODO %?\n  %U\n  %a"
-           :empty-lines 1)
+      `(
+        ("t" "Task → Inbox" entry
+         (file+headline ,my/org-tasks-file "Inbox")
+         "* TODO %?\n  %U\n  %a"
+         :empty-lines 1)
 
-          ;; 2) If you already know it's “Today”
-          ("T" "Task → Today" entry
-           (file+headline ,my/org-tasks-file "Today")
-           "* NEXT %?\n  %U\n  %a"
-           :empty-lines 1)
+        ("T" "Task → Today" entry
+         (file+headline ,my/org-tasks-file "Today")
+         "* NEXT %? :today:\n  %U\n  %a"
+         :empty-lines 1)
 
-          ;; 3) Scheduled task (prompts for date)
-          ("s" "Scheduled Task" entry
-           (file+headline ,my/org-tasks-file "Inbox")
-           "* TODO %?\nSCHEDULED: %^t\n  %U\n  %a"
-           :empty-lines 1)
+        ("s" "Scheduled Task" entry
+         (file+headline ,my/org-tasks-file "Inbox")
+         "* TODO %?\nSCHEDULED: %^t\n  %U\n  %a"
+         :empty-lines 1)
 
-          ;; 4) Link capture (“open tabs”)
-          ;; Captures title + url via %a; you can tag quickly (read/watch/buy/etc.)
-          ("l" "Link → Read Later" entry
-           (file+headline ,my/org-links-file "Read Later")
-           "* TODO %?  %^g\n  %U\n  %a"
-           :empty-lines 1)
+        ;; Links: default :read: tag + prompt for optional extra tags
+        ("l" "Link → Read Later" entry
+         (file+headline ,my/org-links-file "Read Later")
+         "* TODO %? :read:%^g\n  %U\n  %a"
+         :empty-lines 1)
 
-          ;; 5) Journal (datetree)
-          ("j" "Journal" entry
-           (file+datetree ,my/org-journal-file)
-           "* %?\nEntered on %U"
-           :empty-lines 1)
+        ("j" "Journal" entry
+         (file+datetree ,my/org-journal-file)
+         "* %?\nEntered on %U"
+         :empty-lines 1)
 
-          ;; 6) Your existing workout log
-          ("w" "💪 Daily Workout Log" entry
-           (file+datetree ,my/org-workout-file)
-           "* %<%Y-%m-%d> Daily Workout\n\n%?"
-           :empty-lines 1)
-          ))
+        ("u" "Undivided Attention – Sunday Ship Log"
+         entry
+         (file+headline "~/Documents/org/roam/ai/undivided-attention-log.org" "Sunday Ship Log")
+         "* %<%Y-%m-%d> — Undivided Attention\n:PROPERTIES:\n:ID: %(org-id-new)\n:END:\n\n** 🎯 Shipped Artifact\n- \n\n** 🧠 What I Understood This Week\n- \n\n** 🔬 Bottleneck / Lever Observed\n- \n\n** 📎 Links / References\n- \n\n** ➡️ Next Week’s Focus\n- \n\n"
+         :empty-lines 1)
+
+        ("w" "💪 Daily Workout Log" entry
+         (file+datetree ,my/org-workout-file)
+         "* %<%Y-%m-%d> Daily Workout\n\n%?"
+         :empty-lines 1)))
 
   ;; Agenda: make it feel like your notebook list
   (setq org-agenda-start-on-weekday nil
@@ -2084,45 +2163,51 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
 
   (setq org-agenda-custom-commands
         '(
-          ;; Daily dashboard: schedule + chosen next actions + a tiny Inbox triage section
           ("d" "Daily Dashboard"
-           ((agenda ""
-                    ((org-agenda-span 1)
-                     (org-agenda-overriding-header "Schedule & Deadlines")))
+           (
+            (todo "TODO|NEXT"
+                  ((org-agenda-files (list my/org-tasks-file))
+                   (org-agenda-overriding-header "Today")
+                   (org-agenda-skip-function (lambda () (my/org-agenda-skip-not-under "Today")))))
+
+            (todo "DONE"
+                  ((org-agenda-files (list my/org-tasks-file))
+                   (org-agenda-overriding-header "Done Today")
+                   (org-agenda-skip-function #'my/org-agenda-skip-not-closed-today)))
 
             (todo "NEXT"
-                  ((org-agenda-overriding-header "Next Actions")
+                  ((org-agenda-files (list my/org-tasks-file))
+                   (org-agenda-overriding-header "Next Actions")
                    (org-agenda-todo-ignore-scheduled 'future)
                    (org-agenda-todo-ignore-deadlines 'future)))
 
             (todo "WAIT"
-                  ((org-agenda-overriding-header "Waiting / Blocked")))
+                  ((org-agenda-files (list my/org-tasks-file))
+                   (org-agenda-overriding-header "Waiting / Blocked")))
 
-            ;; Inbox triage: show TODOs tagged with nothing special (still in Inbox)
-            (tags-todo "+LEVEL=2+TODO=\"TODO\""
-                       ((org-agenda-overriding-header "Inbox (triage)")
-                        (org-agenda-files (list my/org-tasks-file))
-                        ;; Limit to items under Inbox by matching the heading path
-                        (org-agenda-skip-function
-                         '(org-agenda-skip-entry-if 'notregexp "\\`\\*\\* TODO"))))
+            (todo "TODO"
+                  ((org-agenda-files (list my/org-tasks-file))
+                   (org-agenda-overriding-header "Inbox (triage)")
+                   (org-agenda-skip-function (lambda () (my/org-agenda-skip-not-under "Inbox")))
+                   (org-agenda-todo-ignore-scheduled 'all)
+                   (org-agenda-todo-ignore-deadlines 'all)))
             ))
 
-          ;; All open tasks (excluding SOMEDAY)
-          ("a" "All Active Tasks"
-           ((todo "TODO|NEXT|WAIT"
-                  ((org-agenda-overriding-header "Active Tasks")))))
+        ("a" "All Active Tasks"
+         ((todo "TODO|NEXT|WAIT"
+                ((org-agenda-files (list my/org-tasks-file))
+                 (org-agenda-overriding-header "Active Tasks")))))
 
-          ;; Read later (links)
-          ("r" "Read Later"
-           ((tags-todo "Read Later"
-                      ((org-agenda-files (list my/org-links-file))
-                       (org-agenda-overriding-header "Read / Watch / Buy Queue")))))
+        ("r" "Read Later"
+         ((tags-todo "read"
+                     ((org-agenda-files (list my/org-links-file))
+                      (org-agenda-overriding-header "Read / Watch / Buy Queue")))))
 
-          ;; Someday list (intentionally separate)
-          ("S" "Someday"
-           ((todo "SOMEDAY"
-                  ((org-agenda-overriding-header "Someday / Later")))))
-          ))
+        ("S" "Someday"
+         ((todo "SOMEDAY"
+                ((org-agenda-files (list my/org-tasks-file))
+                 (org-agenda-overriding-header "Someday / Later")))))
+        ))
 
   ;; Quality-of-life: a couple of helper commands
   (defun my/org-cancel-task ()
@@ -2133,7 +2218,19 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
   (defun my/org-someday ()
     "Mark current item SOMEDAY."
     (interactive)
-    (org-todo 'SOMEDAY)))
+    (org-todo 'SOMEDAY))
+
+  (defun my/org--in-heading-p (heading)
+    "Return non-nil if point is under a top-level HEADING."
+    (save-excursion
+      (let ((path (org-get-outline-path t t)))
+        (and path (member heading path)))))
+
+  (defun my/org-agenda-skip-not-under (heading)
+    "Skip entries not under HEADING (a top-level heading name)."
+    (unless (my/org--in-heading-p heading)
+      (or (outline-next-heading) (point-max))))
+  )
 
 (use-package evil-org
   :after org
@@ -2149,6 +2246,18 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
 
 (use-package org-ql
   :after org)
+
+(defun my/org-agenda-skip-not-closed-today ()
+  "Skip entries that are not CLOSED today."
+  (let ((today (format-time-string "%Y-%m-%d")))
+    (save-excursion
+      (org-back-to-heading t)
+      (if (re-search-forward
+           (concat "^[ \t]*CLOSED:.*\\[" today)
+           (save-excursion (org-end-of-subtree t) (point))
+           t)
+          nil
+        (or (outline-next-heading) (point-max))))))
 
 (defun my/org-ql-ai-notes ()
   "Display second-level AI-related notes from ai-notes.org using org-ql."
@@ -2392,6 +2501,19 @@ If NO-CACHE (\\[universal-argument]) is non-nil, don’t use yarn’s script cac
     :title "Today's Liturgical Season"))
 
 ;; ==============================
+;; Writing
+;; ==============================
+(use-package visual-fill-column)
+
+(defun my/prose-mode ()
+  "Settings for prose writing."
+  (interactive)
+  (visual-line-mode 1)
+  (visual-fill-column-mode 1)
+  (setq visual-fill-column-width 80
+        visual-fill-column-center-text t))
+
+;; ==============================
 ;; Stuff
 ;; ==============================
 
@@ -2423,48 +2545,73 @@ or directly if not."
   (when (eq major-mode 'ruby-mode)
     (save-buffer)  ;; Ensure buffer is saved before running Rubocop
     (let* (
-	         ;; Define the names of docker-compose files to look for
-	         (docker-compose-files '("docker-compose.yml" "docker-compose.yaml"))
+           ;; Define the names of docker-compose files to look for
+           (docker-compose-files '("docker-compose.yml" "docker-compose.yaml"))
 
-	         ;; Find the project root by locating a docker-compose file or Gemfile
-	         (project-root
-	          (or
-	           (locate-dominating-file buffer-file-name "docker-compose.yml")
-	           (locate-dominating-file buffer-file-name "docker-compose.yaml")
-	           (locate-dominating-file buffer-file-name "Gemfile")
-	           default-directory))
+           ;; Find the project root by locating a docker-compose file or Gemfile
+           (project-root
+            (or
+             (locate-dominating-file buffer-file-name "docker-compose.yml")
+             (locate-dominating-file buffer-file-name "docker-compose.yaml")
+             (locate-dominating-file buffer-file-name "Gemfile")
+             default-directory))
 
-	         ;; Set the default directory to the project root
-	         (default-directory (or project-root default-directory))
+           ;; Set the default directory to the project root
+           (default-directory (or project-root default-directory))
 
-	         ;; Get the absolute path of the current file
-	         (file (buffer-file-name))
+           ;; Get the absolute path of the current file
+           (file (buffer-file-name))
 
-	         ;; Get the path of the current file relative to the project root
-	         (relative-file (file-relative-name file default-directory))
+           ;; Get the path of the current file relative to the project root
+           (relative-file (file-relative-name file default-directory))
 
-	         ;; Determine the Rubocop command based on the project setup
-	         (rubocop-command
-	          (cond
-	           ;; If a docker-compose file is present, assume containerized project
-	           ((or
-	             (file-exists-p (expand-file-name "docker-compose.yml" project-root))
-	             (file-exists-p (expand-file-name "docker-compose.yaml" project-root)))
-	            ;; Construct the Docker Compose command to run Rubocop inside the 'web' container
-	            (format "docker compose exec web bundle exec rubocop -A %s"
-		                  (shell-quote-argument relative-file)))
+           ;; Determine the Rubocop command based on the project setup
+           (rubocop-command
+            (cond
+             ;; If a docker-compose file is present, assume containerized project
+             ((or
+               (file-exists-p (expand-file-name "docker-compose.yml" project-root))
+               (file-exists-p (expand-file-name "docker-compose.yaml" project-root)))
+              ;; Construct the Docker Compose command to run Rubocop inside the 'web' container
+              (format "docker compose exec web bundle exec rubocop -A %s"
+                      (shell-quote-argument relative-file)))
 
-	           ;; Else if Bundler is available, use it to run Rubocop
-	           ((executable-find "bundle")
-	            (format "bundle exec rubocop -A %s" (shell-quote-argument relative-file)))
+             ;; Else if Bundler is available, use it to run Rubocop
+             ((executable-find "bundle")
+              (format "bundle exec rubocop -A %s" (shell-quote-argument relative-file)))
 
-	           ;; Else, run Rubocop directly
-	           (t
-	            (format "rubocop -A %s" (shell-quote-argument relative-file))))))
+             ;; Else, run Rubocop directly
+             (t
+              (format "rubocop -A %s" (shell-quote-argument relative-file))))))
       ;; Start the Rubocop process in a compilation buffer named "*Rubocop Autocorrect*"
       (compilation-start rubocop-command
-			                   'compilation-mode
-			                   (lambda (mode-name) "*Rubocop Autocorrect*")))))
+                         'compilation-mode
+                         (lambda (mode-name) "*Rubocop Autocorrect*")))))
+
+(defun my/copy-file-path-relative-to-project ()
+  "Copy the current buffer file path relative to the project root."
+  (interactive)
+  (if-let* ((file (buffer-file-name))
+            (project (project-current))
+            (root (project-root project)))
+      (let ((rel (file-relative-name file root)))
+        (kill-new rel)
+        (message "Copied: %s" rel))
+    (user-error "Not in a project or no file")))
+
+(defun my/copy-file-path-with-line ()
+  "Copy file path relative to project root, with line number."
+  (interactive)
+  (if-let* ((file (buffer-file-name))
+            (line (line-number-at-pos))
+            (project (project-current))
+            (root (project-root project)))
+      (let ((text (format "%s:%d"
+                          (file-relative-name file root)
+                          line)))
+        (kill-new text)
+        (message "Copied: %s" text))
+    (user-error "Not in a project or no file")))
 
 ;; ==============================
 ;; Emacs Auto-gen

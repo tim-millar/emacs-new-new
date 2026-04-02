@@ -1961,7 +1961,56 @@ Also wire env + path mapping for container runs."
       "jS" '(agent-shell :which-key "Agent shell")
       "jC" '(agent-shell-openai-start-codex :which-key "Codex (agent-shell)"))))
 
+(defun tim/agent-shell-project-env ()
+  (let* ((root (or (locate-dominating-file default-directory ".git")
+                   default-directory))
+         (tmp  (expand-file-name ".tmp" root))
+         (xdg  (expand-file-name ".cache/xdg" root))
+         (yarn (expand-file-name ".cache/yarn" root))
+         (home (or (getenv "HOME") (expand-file-name ".home" root))))
+    (dolist (dir (list tmp xdg yarn))
+      (make-directory dir t))
+    (agent-shell-make-environment-variables
+     :inherit-env t
+     "HOME" home
+     "TMPDIR" tmp
+     "XDG_CACHE_HOME" xdg
+     "YARN_CACHE_FOLDER" yarn)))
 
+(with-eval-after-load 'agent-shell
+  (setq agent-shell-openai-environment
+        (tim/agent-shell-project-env)))
+
+(defun tim/agent-shell-display-smart (buffer _alist)
+  "Display agent-shell BUFFER in a sensible side-by-side window.
+
+If there is only one window, split left/right and show BUFFER on the right.
+If there is more than one window, reuse the next window instead of taking
+over the selected one."
+  (let ((selected (selected-window)))
+    (cond
+     ;; Reuse an existing visible window already showing this buffer.
+     ((get-buffer-window buffer)
+      (let ((win (get-buffer-window buffer)))
+        (select-window win)
+        win))
+
+     ;; Single window: create a right-hand split.
+     ((one-window-p t)
+      (let ((win (split-window-right)))
+        (set-window-buffer win buffer)
+        (select-window win)
+        win))
+
+     ;; Already split: use the "other" window, not the current one.
+     (t
+      (let ((win (next-window selected nil t)))
+        (set-window-buffer win buffer)
+        (select-window win)
+        win)))))
+
+(with-eval-after-load 'agent-shell
+  (setq agent-shell-display-action #'tim/agent-shell-display-smart))
 
 ;; ==============================
 ;; Software Development / Programming Language Specific

@@ -1171,7 +1171,9 @@ multiple eshell windows easier."
 (use-package flycheck
   :after add-node-modules-path
   :init
-  (global-flycheck-mode))
+  (global-flycheck-mode)
+  :config
+  (setq flycheck-shellcheck-shell 'bash))
 
 (with-eval-after-load 'flycheck
   (defun my/flycheck-chain-lsp-to-eslint ()
@@ -1718,7 +1720,7 @@ Also wire env + path mapping for container runs."
           (when entry
             (let ((api-key (plist-get entry :key)))
               (when (stringp api-key) api-key)))))
-  (setq gptel-default-model "gpt-5.1"
+  (setq gptel-default-model "gpt-5.4-mini"
         gptel-temperature 0.7)
 
   ;; (require 'gptel-openai-extras) ; bundled with gptel
@@ -1749,7 +1751,7 @@ Also wire env + path mapping for container runs."
   :hook (org-mode . org-ai-mode)  ;; Enable org-ai in Org buffers
   :init
   (setq org-ai-auto-fill t)
-  (setq org-ai-default-chat-model "gpt-5.1"
+  (setq org-ai-default-chat-model "gpt-5.4-mini"
         org-ai-directory (expand-file-name "org-ai" org-directory))
   (setq org-ai-openai-api-token
         (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
@@ -1786,7 +1788,7 @@ Also wire env + path mapping for container runs."
               (when (stringp api-key) api-key))))
 
         ;; Set the default model to o4-mini-high
-        aidermacs-default-model "gpt-5.1-codex"
+        aidermacs-default-model "gpt-5.4"
 
         ;; Optional: Adjust temperature if desired
         aidermacs-temperature 0.3)
@@ -1927,7 +1929,7 @@ Also wire env + path mapping for container runs."
   :straight (:host github :repo "xenodium/agent-shell")
   :after (acp shell-maker)
   :commands (agent-shell agent-shell-openai-start-codex)
-  :init
+  :config
   ;; API key auth
   (setq agent-shell-openai-authentication
         (agent-shell-openai-make-authentication
@@ -1948,10 +1950,9 @@ Also wire env + path mapping for container runs."
         '("gemini" "--experimental-acp" "--model" "auto"))
 
   ;; Keep agent selection focused
-  (setq agent-shell-preferred-agent-config
-        (agent-shell-openai-make-codex-config))
+  ;; (setq agent-shell-preferred-agent-config
+  ;;       (agent-shell-openai-make-codex-config))
 
-  :config
   ;; Ctrl+Enter submits (shell-maker)
   (define-key agent-shell-mode-map (kbd "C-<return>") #'shell-maker-submit)
 
@@ -1959,16 +1960,23 @@ Also wire env + path mapping for container runs."
   (with-eval-after-load 'general
     (tyrant-def
       "jS" '(agent-shell :which-key "Agent shell")
-      "jC" '(agent-shell-openai-start-codex :which-key "Codex (agent-shell)"))))
+      "jC" '(tim/agent-shell-codex-plain :which-key "Codex plain")
+      "jW" '(tim/agent-shell-codex-wrapped :which-key "Codex wrapped")
+      "jI" '(tim/agent-shell-codex-on-issue :which-key "Codex on issue")
+      "jA" '(tim/agent-shell-codex-auto :which-key "Codex auto")
+      ))
+  )
 
 (defun tim/agent-shell-project-env ()
+  (require 'agent-shell)
   (let* ((root (or (locate-dominating-file default-directory ".git")
                    default-directory))
          (tmp  (expand-file-name ".tmp" root))
          (xdg  (expand-file-name ".cache/xdg" root))
          (yarn (expand-file-name ".cache/yarn" root))
-         (home (or (getenv "HOME") (expand-file-name ".home" root))))
-    (dolist (dir (list tmp xdg yarn))
+         (home (or (getenv "HOME")
+                   (expand-file-name ".home" root))))
+    (dolist (dir (list tmp xdg yarn home))
       (make-directory dir t))
     (agent-shell-make-environment-variables
      :inherit-env t
@@ -1976,10 +1984,6 @@ Also wire env + path mapping for container runs."
      "TMPDIR" tmp
      "XDG_CACHE_HOME" xdg
      "YARN_CACHE_FOLDER" yarn)))
-
-(with-eval-after-load 'agent-shell
-  (setq agent-shell-openai-environment
-        (tim/agent-shell-project-env)))
 
 (defun tim/agent-shell-display-smart (buffer _alist)
   "Display agent-shell BUFFER in a sensible side-by-side window.
@@ -2011,6 +2015,174 @@ over the selected one."
 
 (with-eval-after-load 'agent-shell
   (setq agent-shell-display-action #'tim/agent-shell-display-smart))
+
+;; ==============================
+;; codex wrapper config
+;; ==============================
+
+(require 'subr-x)
+(require 'seq)
+
+(defun tim/project-root-or-default ()
+  (or (locate-dominating-file default-directory ".git")
+      default-directory))
+
+(defun tim/agent-shell--buffer-name (label root)
+  (format "*agent-shell:%s:%s*"
+          label
+          (file-name-nondirectory
+           (directory-file-name (expand-file-name root)))))
+
+(defun tim/codex-acp-wrapper-for-project (&optional root)
+  (let* ((root (file-name-as-directory (or root (tim/project-root-or-default))))
+         (candidates
+          (list
+           (expand-file-name "scripts/run_codex_acp.sh" root))))
+    (seq-find #'file-exists-p candidates)))
+
+(defun tim/codex-acp-plain-command ()
+  (cond
+   ((executable-find "codex-acp")
+    '("codex-acp"))
+   ((executable-find "npx")
+    '("npx" "--yes" "@zed-industries/codex-acp"))
+   (t
+    (user-error "Neither codex-acp nor npx is available on PATH"))))
+
+(defun tim/codex-wrapper-command (&rest args)
+  (let ((wrapper (tim/codex-acp-wrapper-for-project)))
+    (unless wrapper
+      (user-error "No project ACP wrapper found"))
+    (append (list wrapper) args)))
+
+(defun tim/codex-wrapper-prompt (&rest args)
+  (let* ((default-directory (tim/project-root-or-default))
+         (cmd (append (tim/codex-wrapper-command "--emit-prompt") args))
+         (buf (generate-new-buffer " *tim-codex-wrapper-prompt*")))
+    (unwind-protect
+        (let ((exit (apply #'call-process (car cmd) nil buf nil (cdr cmd))))
+          (unless (eq exit 0)
+            (with-current-buffer buf
+              (error "Wrapper prompt command failed:\n%s" (buffer-string))))
+          (with-current-buffer buf
+            (string-trim-right (buffer-string))))
+      (kill-buffer buf))))
+
+(defun tim/agent-shell--inject-and-submit (buffer text)
+  (with-current-buffer buffer
+    (goto-char (point-max))
+    (unless (bolp) (insert "\n"))
+    (insert text)
+    (shell-maker-submit)))
+
+(defun tim/agent-shell-start-codex-with-command (label command &optional initial-prompt)
+  (require 'agent-shell)
+  (let* ((root (file-name-as-directory (tim/project-root-or-default)))
+         (default-directory root)
+         (buf-name (tim/agent-shell--buffer-name label root))
+         (existing (get-buffer buf-name))
+         (old-command agent-shell-openai-codex-acp-command)
+         (old-env agent-shell-openai-codex-environment))
+    (setq agent-shell-openai-codex-acp-command command)
+    (setq agent-shell-openai-codex-environment (tim/agent-shell-project-env))
+    (message "Launching Codex label=%S root=%S command=%S prompt-len=%S"
+             label root command (and initial-prompt (length initial-prompt)))
+    (if (buffer-live-p existing)
+        (progn
+          (pop-to-buffer existing)
+          (when (and initial-prompt (not (string-empty-p initial-prompt)))
+            (tim/agent-shell--inject-and-submit existing initial-prompt)))
+      (let ((agent-shell-buffer-name buf-name))
+        (agent-shell-openai-start-codex)
+        (when (and initial-prompt (not (string-empty-p initial-prompt)))
+          (run-at-time
+           0.5 nil
+           (lambda (buffer-name text)
+             (let ((buf (get-buffer buffer-name)))
+               (when (buffer-live-p buf)
+                 (tim/agent-shell--inject-and-submit buf text))))
+           buf-name
+           initial-prompt))))
+    (run-at-time
+     1.0 nil
+     (lambda (prev-command prev-env)
+       (setq agent-shell-openai-codex-acp-command prev-command)
+       (setq agent-shell-openai-codex-environment prev-env))
+     old-command
+     old-env)))
+
+(defun tim/agent-shell-codex-plain ()
+  "Start plain Codex ACP for ad hoc exploratory work."
+  (interactive)
+  (tim/agent-shell-start-codex-with-command
+   "codex-plain"
+   (tim/codex-acp-plain-command)))
+
+(defun tim/agent-shell-codex-wrapped ()
+  "Start wrapped Codex ACP for structured deterministic work."
+  (interactive)
+  (let ((prompt (tim/codex-wrapper-prompt)))
+    (tim/agent-shell-start-codex-with-command
+     "codex-wrapped"
+     (tim/codex-wrapper-command)
+     prompt)))
+
+(defun tim/agent-shell-codex-on-issue (issue-number &optional no-prompt)
+  "Start wrapped Codex ACP on ISSUE-NUMBER."
+  (interactive
+   (list
+    (read-number "Issue number: ")
+    current-prefix-arg))
+  (let* ((args (append (when no-prompt (list "--no-prompt"))
+                       (list "--issue" (number-to-string issue-number))))
+         (prompt (apply #'tim/codex-wrapper-prompt args))
+         (command (apply #'tim/codex-wrapper-command args)))
+    (tim/agent-shell-start-codex-with-command
+     (format "codex-issue-%s" issue-number)
+     command
+     prompt)))
+
+(defun tim/agent-shell-codex-auto ()
+  "Use wrapped Codex if available, else fall back to plain Codex ACP."
+  (interactive)
+  (if (tim/codex-acp-wrapper-for-project)
+      (call-interactively #'tim/agent-shell-codex-wrapped)
+    (call-interactively #'tim/agent-shell-codex-plain)))
+
+(defun tim/debug-codex-launch-config ()
+  (interactive)
+  (message
+   "root=%S wrapper=%S plain=%S env=%S"
+   (tim/project-root-or-default)
+   (tim/codex-acp-wrapper-for-project)
+   (tim/codex-acp-plain-command)
+   (tim/agent-shell-project-env)))
+
+(defun tim/debug-run-codex-wrapper (&optional issue)
+  (interactive "P")
+  (let* ((default-directory (tim/project-root-or-default))
+         (cmd (if issue
+                  (tim/codex-wrapper-command "--emit-prompt" "--issue" "1")
+                (tim/codex-wrapper-command "--emit-prompt")))
+         (buf (get-buffer-create "*tim-codex-wrapper-debug*")))
+    (with-current-buffer buf
+      (erase-buffer)
+      (insert (format "default-directory: %s\n\n" default-directory))
+      (insert (format "cmd: %S\n\n" cmd)))
+    (let ((exit (apply #'call-process (car cmd) nil buf t (cdr cmd))))
+      (with-current-buffer buf
+        (goto-char (point-min)))
+      (pop-to-buffer buf)
+      (message "Wrapper exit code: %S" exit))))
+
+(defun tim/debug-wrapper-prompt ()
+  (interactive)
+  (let ((prompt (tim/codex-wrapper-prompt)))
+    (with-current-buffer (get-buffer-create "*tim-wrapper-prompt*")
+      (erase-buffer)
+      (insert prompt)
+      (goto-char (point-min))
+      (pop-to-buffer (current-buffer)))))
 
 ;; ==============================
 ;; Software Development / Programming Language Specific

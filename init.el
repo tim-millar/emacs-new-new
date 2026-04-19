@@ -1732,15 +1732,29 @@ Also wire env + path mapping for container runs."
   ;;                     (verbosity . "low")))
   ;; (setq gptel-backend (gptel-backend "OpenAI+")
   ;;       gptel-model "gpt-5")
+  :config
+  (gptel-make-ollama "Ollama"
+    :host "localhost:11434"
+    :stream t
+    :models '(qwen3:8b qwen3.5))
+
+  (defun my/gptel-use-ollama (model)
+    (interactive
+     (list (intern (completing-read "Ollama model: " '("qwen3:8b" "qwen3.5") nil t))))
+    (setq-local gptel-backend (gptel-get-backend "Ollama"))
+    (setq-local gptel-model model)
+    (message "gptel -> Ollama / %s" model))
 
   :general
   (:keymaps 'gptel-mode-map
             :states '(normal insert visual motion)
             "C-<return>" 'gptel-send)  ;; Send input with Ctrl+Enter
   (tyrant-def
+    "jO" '(my/gptel-use-ollama :which-key "Use Ollama in gptel")
     "jg" '(gptel :which-key "Open GPT chat")
     "js" '(gptel-send :which-key "Send to GPT")
-    "jm" '(gptel-menu :which-key "GPT Menu")))
+    "jm" '(gptel-menu :which-key "GPT Menu"))
+  )
 
 ;; Org AI integration with Org-mode
 (use-package org-ai

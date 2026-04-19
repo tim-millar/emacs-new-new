@@ -2049,15 +2049,18 @@ over the selected one."
    (t
     (user-error "Neither codex-acp nor npx is available on PATH"))))
 
-(defun tim/codex-wrapper-command (&rest args)
-  (let ((wrapper (tim/codex-acp-wrapper-for-project)))
+(defun tim/codex-acp-wrapper-script (&optional root)
+  (let ((wrapper (tim/codex-acp-wrapper-for-project root)))
     (unless wrapper
       (user-error "No project ACP wrapper found"))
-    (append (list wrapper) args)))
+    wrapper))
+
+(defun tim/codex-wrapper-prompt-command (&rest args)
+  (append (list (tim/codex-acp-wrapper-script)) args))
 
 (defun tim/codex-wrapper-prompt (&rest args)
   (let* ((default-directory (tim/project-root-or-default))
-         (cmd (append (tim/codex-wrapper-command "--emit-prompt") args))
+         (cmd (append (tim/codex-wrapper-prompt-command "--emit-prompt") args))
          (buf (generate-new-buffer " *tim-codex-wrapper-prompt*")))
     (unwind-protect
         (let ((exit (apply #'call-process (car cmd) nil buf nil (cdr cmd))))
@@ -2068,78 +2071,180 @@ over the selected one."
             (string-trim-right (buffer-string))))
       (kill-buffer buf))))
 
-(defun tim/agent-shell--inject-and-submit (buffer text)
-  (with-current-buffer buffer
-    (goto-char (point-max))
-    (unless (bolp) (insert "\n"))
-    (insert text)
-    (shell-maker-submit)))
+(defun tim/agent-shell-project-env ()
+  (require 'agent-shell)
+  (let* ((root (or (locate-dominating-file default-directory ".git")
+                   default-directory))
+         (tmp  (expand-file-name ".tmp" root))
+         (xdg  (expand-file-name ".cache/xdg" root))
+         (yarn (expand-file-name ".cache/yarn" root))
+         (home (or (getenv "HOME")
+                   (expand-file-name ".home" root))))
+    (dolist (dir (list tmp xdg yarn home))
+      (make-directory dir t))
+    (agent-shell-make-environment-variables
+     :inherit-env t
+     "HOME" home
+     "TMPDIR" tmp
+     "XDG_CACHE_HOME" xdg
+     "YARN_CACHE_FOLDER" yarn)))
 
-(defun tim/agent-shell-start-codex-with-command (label command &optional initial-prompt)
+(defun tim/git-config-value (key)
+  (let ((default-directory (tim/project-root-or-default)))
+    (string-trim
+     (with-temp-buffer
+       (if (eq 0 (call-process "git" nil t nil "config" "--get" key))
+           (buffer-string)
+         "")))))
+
+(defun tim/agent-shell-project-env-wrapped (&optional issue-number)
+  (require 'agent-shell)
+  (let* ((root (or (locate-dominating-file default-directory ".git")
+                   default-directory))
+         (tmp  (expand-file-name ".tmp" root))
+         (xdg  (expand-file-name ".cache/xdg" root))
+         (yarn (expand-file-name ".cache/yarn" root))
+         (home (or (getenv "HOME")
+                   (expand-file-name ".home" root)))
+         (developer-name (tim/git-config-value "user.name"))
+         (developer-email (tim/git-config-value "user.email"))
+         (prompt-file (expand-file-name "docs/CODEX_PROMPT.txt" root)))
+    (dolist (dir (list tmp xdg yarn home))
+      (make-directory dir t))
+    (agent-shell-make-environment-variables
+     :inherit-env t
+     "HOME" home
+     "TMPDIR" tmp
+     "XDG_CACHE_HOME" xdg
+     "YARN_CACHE_FOLDER" yarn
+     "AGENT_NAME" "Codex"
+     "AGENT_GIT_MODE" "developer-author"
+     "AGENT_LAUNCHED_BY_NAME" developer-name
+     "AGENT_LAUNCHED_BY_EMAIL" developer-email
+     "AGENT_ISSUE_NUMBER" (or issue-number "")
+     "AGENT_PROMPT_FILE" prompt-file
+     "AGENT_REPO_ROOT" root)))
+
+(defun tim/agent-shell-openai-make-codex-client-with-command (buffer command environment)
+  (require 'agent-shell)
+  (unless buffer
+    (error "Missing required argument: buffer"))
+  (let ((auth agent-shell-openai-authentication))
+    (cond
+     ((map-elt auth :api-key)
+      (let ((api-key (funcall (map-elt auth :api-key))))
+        (unless api-key
+          (user-error "Please set your `agent-shell-openai-authentication'"))
+        (agent-shell--make-acp-client
+         :command (car command)
+         :command-params (cdr command)
+         :environment-variables
+         (append (list (format "OPENAI_API_KEY=%s" api-key))
+                 environment)
+         :context-buffer buffer)))
+     ((map-elt auth :codex-api-key)
+      (let ((codex-key (funcall (map-elt auth :codex-api-key))))
+        (unless codex-key
+          (user-error "Please set your `agent-shell-openai-authentication'"))
+        (agent-shell--make-acp-client
+         :command (car command)
+         :command-params (cdr command)
+         :environment-variables
+         (append (list (format "CODEX_API_KEY=%s" codex-key))
+                 environment)
+         :context-buffer buffer)))
+     ((map-elt auth :login)
+      (agent-shell--make-acp-client
+       :command (car command)
+       :command-params (cdr command)
+       :environment-variables
+       (append '("OPENAI_API_KEY=") environment)
+       :context-buffer buffer))
+     (t
+      (error "Invalid authentication configuration")))))
+
+(defun tim/agent-shell-codex-config-with-command (command environment)
+  (require 'agent-shell)
+  (let ((config (agent-shell-openai-make-codex-config)))
+    (setf (alist-get :client-maker config)
+          (lambda (&rest args)
+            (tim/agent-shell-openai-make-codex-client-with-command
+             (car args)
+             command
+             environment)))
+    config))
+
+(defvar tim/agent-shell-pending-initial-prompt nil)
+
+(defun tim/agent-shell--inject-pending-prompt ()
+  (when (and tim/agent-shell-pending-initial-prompt
+             (derived-mode-p 'agent-shell-mode))
+    (let ((text tim/agent-shell-pending-initial-prompt)
+          (buf (current-buffer)))
+      (setq tim/agent-shell-pending-initial-prompt nil)
+      (run-at-time
+       0.8 nil
+       (lambda (buffer prompt)
+         (when (buffer-live-p buffer)
+           (with-current-buffer buffer
+             (message "Injecting prompt into %s (%d chars)"
+                      (buffer-name buffer) (length prompt))
+             (agent-shell--insert-to-shell-buffer
+              :text prompt
+              :shell-buffer buffer)
+             (run-at-time
+              0.2 nil
+              (lambda (b)
+                (when (buffer-live-p b)
+                  (with-current-buffer b
+                    (shell-maker-submit))))
+              buffer))))
+       buf text))))
+
+(with-eval-after-load 'agent-shell
+  (add-hook 'agent-shell-mode-hook #'tim/agent-shell--inject-pending-prompt))
+
+(defun tim/agent-shell-start-codex-with-command (label command environment &optional initial-prompt)
   (require 'agent-shell)
   (let* ((root (file-name-as-directory (tim/project-root-or-default)))
          (default-directory root)
-         (buf-name (tim/agent-shell--buffer-name label root))
-         (existing (get-buffer buf-name))
-         (old-command agent-shell-openai-codex-acp-command)
-         (old-env agent-shell-openai-codex-environment))
-    (setq agent-shell-openai-codex-acp-command command)
-    (setq agent-shell-openai-codex-environment (tim/agent-shell-project-env))
+         (config (tim/agent-shell-codex-config-with-command command environment)))
     (message "Launching Codex label=%S root=%S command=%S prompt-len=%S"
              label root command (and initial-prompt (length initial-prompt)))
-    (if (buffer-live-p existing)
-        (progn
-          (pop-to-buffer existing)
-          (when (and initial-prompt (not (string-empty-p initial-prompt)))
-            (tim/agent-shell--inject-and-submit existing initial-prompt)))
-      (let ((agent-shell-buffer-name buf-name))
-        (agent-shell-openai-start-codex)
-        (when (and initial-prompt (not (string-empty-p initial-prompt)))
-          (run-at-time
-           0.5 nil
-           (lambda (buffer-name text)
-             (let ((buf (get-buffer buffer-name)))
-               (when (buffer-live-p buf)
-                 (tim/agent-shell--inject-and-submit buf text))))
-           buf-name
-           initial-prompt))))
-    (run-at-time
-     1.0 nil
-     (lambda (prev-command prev-env)
-       (setq agent-shell-openai-codex-acp-command prev-command)
-       (setq agent-shell-openai-codex-environment prev-env))
-     old-command
-     old-env)))
+    (setq tim/agent-shell-pending-initial-prompt initial-prompt)
+    (agent-shell--dwim :config config :new-shell t)))
 
 (defun tim/agent-shell-codex-plain ()
   "Start plain Codex ACP for ad hoc exploratory work."
   (interactive)
   (tim/agent-shell-start-codex-with-command
    "codex-plain"
-   (tim/codex-acp-plain-command)))
+   (tim/codex-acp-plain-command)
+   (tim/agent-shell-project-env)))
 
 (defun tim/agent-shell-codex-wrapped ()
-  "Start wrapped Codex ACP for structured deterministic work."
+  "Start Codex ACP with wrapper-built prompt for structured deterministic work."
   (interactive)
   (let ((prompt (tim/codex-wrapper-prompt)))
     (tim/agent-shell-start-codex-with-command
      "codex-wrapped"
-     (tim/codex-wrapper-command)
+     (tim/codex-acp-plain-command)
+     (tim/agent-shell-project-env-wrapped)
      prompt)))
 
 (defun tim/agent-shell-codex-on-issue (issue-number &optional no-prompt)
-  "Start wrapped Codex ACP on ISSUE-NUMBER."
+  "Start Codex ACP with wrapper-built prompt on ISSUE-NUMBER."
   (interactive
    (list
     (read-number "Issue number: ")
     current-prefix-arg))
   (let* ((args (append (when no-prompt (list "--no-prompt"))
                        (list "--issue" (number-to-string issue-number))))
-         (prompt (apply #'tim/codex-wrapper-prompt args))
-         (command (apply #'tim/codex-wrapper-command args)))
+         (prompt (apply #'tim/codex-wrapper-prompt args)))
     (tim/agent-shell-start-codex-with-command
      (format "codex-issue-%s" issue-number)
-     command
+     (tim/codex-acp-plain-command)
+     (tim/agent-shell-project-env-wrapped (number-to-string issue-number))
      prompt)))
 
 (defun tim/agent-shell-codex-auto ()
@@ -2152,18 +2257,19 @@ over the selected one."
 (defun tim/debug-codex-launch-config ()
   (interactive)
   (message
-   "root=%S wrapper=%S plain=%S env=%S"
+   "root=%S wrapper=%S plain=%S env=%S wrapped-env=%S"
    (tim/project-root-or-default)
    (tim/codex-acp-wrapper-for-project)
    (tim/codex-acp-plain-command)
-   (tim/agent-shell-project-env)))
+   (tim/agent-shell-project-env)
+   (tim/agent-shell-project-env-wrapped)))
 
 (defun tim/debug-run-codex-wrapper (&optional issue)
   (interactive "P")
   (let* ((default-directory (tim/project-root-or-default))
          (cmd (if issue
-                  (tim/codex-wrapper-command "--emit-prompt" "--issue" "1")
-                (tim/codex-wrapper-command "--emit-prompt")))
+                  (tim/codex-wrapper-prompt-command "--emit-prompt" "--issue" "1")
+                (tim/codex-wrapper-prompt-command "--emit-prompt")))
          (buf (get-buffer-create "*tim-codex-wrapper-debug*")))
     (with-current-buffer buf
       (erase-buffer)
@@ -2183,6 +2289,15 @@ over the selected one."
       (insert prompt)
       (goto-char (point-min))
       (pop-to-buffer (current-buffer)))))
+
+(defun tim/debug-acp-make-client (orig-fn &rest args)
+  (with-current-buffer (get-buffer-create "*tim-acp-debug*")
+    (goto-char (point-max))
+    (insert "\n=== acp-make-client ===\n")
+    (insert (format "%S\n" args)))
+  (apply orig-fn args))
+
+(advice-add 'acp-make-client :around #'tim/debug-acp-make-client)
 
 ;; ==============================
 ;; Software Development / Programming Language Specific

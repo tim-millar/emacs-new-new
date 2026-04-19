@@ -1709,6 +1709,45 @@ Also wire env + path mapping for container runs."
   (define-key prog-mode-map (kbd "M-[") #'dumb-jump-back))
 
 ;; ==============================
+;; Whisper
+;; ==============================
+
+(defvar my/whisper-mode 'openai)
+
+(defun my/toggle-whisper-mode ()
+  (interactive)
+  (setq my/whisper-mode
+        (if (eq my/whisper-mode 'openai) nil 'openai))
+  (message "Whisper mode: %s"
+           (if my/whisper-mode "OpenAI" "Local")))
+
+(defun my/whisper-run ()
+  (interactive)
+  (setq whisper-server-mode my/whisper-mode)
+  (call-interactively #'whisper-run))
+
+(use-package whisper
+  :straight (:host github :repo "natrys/whisper.el")
+  :commands (whisper-run)
+  :bind (("C-c w" . my/whisper-run)
+         ("C-c W" . my/toggle-whisper-mode))
+  :init
+  (setq whisper-install-directory
+        (expand-file-name "whisper/" user-emacs-directory))
+  :config
+  (setq whisper-openai-model "gpt-4o-mini-transcribe"
+        whisper-openai-api-key (getenv "OPENAI_API_KEY"))
+  (setq whisper-model "base"
+        whisper-language "en"
+        whisper-translate nil
+        whisper-use-threads (max 1 (/ (num-processors) 2))
+        whisper-cursor-return nil
+        whisper-recording-timeout 300
+        whisper-quantize nil
+        whisper--ffmpeg-input-format "avfoundation"
+        whisper--ffmpeg-input-device ":0"))
+
+;; ==============================
 ;; Software Development / LLMs and Gen AI
 ;; ==============================
 

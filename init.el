@@ -1864,131 +1864,199 @@ Also wire env + path mapping for container runs."
       "oix" '(org-ai-explain-code :which-key "AI explain code")
       )))
 
+;; ==============================
+;; Aidermacs (New Config)
+;; ==============================
+
+;;; Baseline Aidermacs config
+
+(require 'auth-source)
+
+(defun my/auth-source-secret (host)
+  "Return auth-source secret for HOST."
+  (let* ((entry (car (auth-source-search
+                      :host host
+                      :max 1
+                      :require '(:key))))
+         (secret (plist-get entry :key)))
+    (cond
+     ((functionp secret) (funcall secret))
+     ((stringp secret) secret)
+     (t nil))))
+
+(defun my/aidermacs-load-env ()
+  "Load API keys for Aidermacs/Aider."
+  (let ((openai-key (my/auth-source-secret "openai.com")))
+    (when openai-key
+      (setenv "OPENAI_API_KEY" openai-key))))
+
 (use-package aidermacs
   :straight (:host github :repo "MatthewZMD/aidermacs")
-  :commands (aidermacs-transient-menu aidermacs-run-aidermacs aidermacs-send-line-or-region)
+  :commands
+  (aidermacs-transient-menu
+   aidermacs-run
+   aidermacs-send-line-or-region)
   :init
+  (my/aidermacs-load-env)
 
-  (setq aidermacs-openai-api-token
-        (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
-          (when entry
-            (let ((api-key (plist-get entry :key)))
-              (when (stringp api-key) api-key))))
+  (setq aidermacs-default-model "openai/gpt-5.4"
+        aidermacs-auto-commits nil
+        aidermacs-show-diff-after-change t)
 
-        ;; Set the default model to o4-mini-high
-        aidermacs-default-model "gpt-5.4"
-
-        ;; Optional: Adjust temperature if desired
-        aidermacs-temperature 0.3)
-
-   ;; Start Aider at project root when possible
-  (setq aidermacs-default-directory
-        (when (project-current) (project-root (project-current))))
-
-  ;; --- Profiles ---
-  (defvar my/aider-args-propose
-    '("--no-auto-commits" "--dry-run" "--show-diffs" "--no-dirty-commits")
-    "Aider args for propose-only (no file writes, no commits).")
-
-  (defvar my/aider-args-apply
-    '("--no-auto-commits" "--show-diffs")
-    "Aider args for apply mode (writes allowed, still no auto-commits).")
-
-  (defvar my/aider-args-apply-clipboard
-    '("--no-auto-commits" "--apply-clipboard-edits")
-    "Aider args to apply a diff from the clipboard/kill-ring.")
-
-  (defvar my/aider-args-architect
-    '("--no-auto-commits" "--dry-run" "--show-diffs" "--architect" "--editor-edit-format=editor-diff")
-    "Aider args for architect (suggest-only) mode.")
-
-  ;; --- Launchers ---
-  (defun my/aider--start (args)
-    "Start Aidermacs with ARGS for this session."
-    (let ((aidermacs-args args))
-      (aidermacs-run-aidermacs)))
-
-  (defun my/aider-propose ()            (interactive) (my/aider--start my/aider-args-propose))
-  (defun my/aider-apply ()              (interactive) (my/aider--start my/aider-args-apply))
-  (defun my/aider-apply-clipboard ()    (interactive) (my/aider--start my/aider-args-apply-clipboard))
-  (defun my/aider-architect ()          (interactive) (my/aider--start my/aider-args-architect))
-
-  ;; Quick “toggle”: restart the last session profile but flip dry-run on/off.
-  (defvar my/aider-last-args my/aider-args-propose)
-  (defun my/aider--remember (fn args) (setq my/aider-last-args args) (funcall fn))
-  (advice-add 'my/aider-propose         :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-propose)))
-  (advice-add 'my/aider-apply           :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-apply)))
-  (advice-add 'my/aider-apply-clipboard :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-apply-clipboard)))
-  (advice-add 'my/aider-architect       :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-architect)))
-
-  (defun my/aider-toggle-dry-run ()
-    "Restart Aider with the last args but toggled dry-run."
-    (interactive)
-    (let* ((args my/aider-last-args)
-           (has-dry (member "--dry-run" args))
-           (toggled (if has-dry (remove "--dry-run" args) (append args '("--dry-run")))))
-      (my/aider--start toggled)
-      (setq my/aider-last-args toggled)))
-
-  ;; Handy helpers
-  (defun my/aider-diff-last () (interactive) (call-interactively #'aidermacs-diff-last))
-  (defun my/aider-rewrite-region () (interactive) (call-interactively #'aidermacs-rewrite-region))
-
-  ;; --- Transient menu (SPC j A) ---
-  (transient-define-prefix my/aider-transient ()
-    "Aider control panel"
-    [["Sessions"
-      ("p" "Propose (dry-run)"           my/aider-propose)
-      ("w" "Write (apply, no commits)"   my/aider-apply)
-      ("c" "Apply clipboard diff"        my/aider-apply-clipboard)
-      ("r" "Architect (suggest-only)"    my/aider-architect)]
-     ["Actions"
-      ("d" "Show last diff"              my/aider-diff-last)
-      ("e" "Rewrite region"              my/aider-rewrite-region)
-      ("t" "Toggle dry-run & restart"    my/aider-toggle-dry-run)]])
+  ;; Leave this alone for baseline testing.
+  ;; (setq aidermacs-backend 'vterm)
 
   :config
-  ;; You can define additional settings here if required by the aidermacs package
   (setq aidermacs-history-max-length 50)
+
   :general
-  ;; Place both aidermacs and gptel keybindings under the SPACE-j prefix
   (:keymaps 'aidermacs-mode-map
             :states '(normal insert visual motion)
-            "C-<return>" 'aidermacs-send-line-or-region)  ;; Send input with Ctrl+Enter
+            "C-<return>" #'aidermacs-send-line-or-region)
 
-  ;; Define SPACE-j bindings for both aidermacs and gptel
   (tyrant-def
-    "ja" '(aidermacs-transient-menu :which-key "Start Aider Menu")
-    "jj" 'my/aider-propose          ;; default = propose-only (Codex-like)
-    "jw" 'my/aider-apply            ;; allow writes, still no auto-commit
-    "jc" 'my/aider-apply-clipboard  ;; apply exactly what's in clipboard
-    "jt" 'my/aider-toggle-dry-run   ;; fast flip
-    "jd" 'my/aider-diff-last
-    "je" 'my/aider-rewrite-region
-    "jA" 'my/aider-transient
-    ))
+    "ja" '(aidermacs-transient-menu :which-key "Aidermacs menu")
+    "jj" '(aidermacs-run :which-key "Aidermacs run")))
 
-(defun my/aidermacs-use (model)
-  "Switch aidermacs model for this session."
-  (interactive "sModel: ")
-  (setq aidermacs-default-model model)
-  (message "aidermacs-default-model → %s" model))
+;; ==============================
+;; Aidermacs (Broken Config)
+;; ==============================
 
-(use-package model-switcher
-  :straight nil
-  :load-path "lisp"
-  :commands (my/aidermacs-choose-model my/openai-refresh-models)
-  :after (aidermacs general)
-  :init
-  ;; (setq my/openai-base-url "https://api.openai.com/v1") ;; change if needed
-  :config
-  ;; If you *didn’t* keep the keybindings inside model-switcher.el,
-  ;; you can put them here instead:
-  ;; (when (fboundp 'tyrant-def)
-  ;;   (tyrant-def
-  ;;     "jm" '(my/aidermacs-choose-model :which-key "Choose Aider model")
-  ;;     "jM" '(my/openai-refresh-models :which-key "Refresh models")))
-  )
+;; (use-package aidermacs
+;;   :straight (:host github :repo "MatthewZMD/aidermacs")
+;;   :commands (aidermacs-transient-menu aidermacs-run aidermacs-send-line-or-region)
+;;   :init
+
+;;   (setenv "OPENAI_API_KEY"
+;;           (let ((entry (car (auth-source-search :host "openai.com" :max 1 :require '(:key)))))
+;;             (when entry
+;;               (let ((secret (plist-get entry :key)))
+;;                 (if (functionp secret) (funcall secret) secret)))))
+
+;;   (setq ;; aidermacs-default-model "o4-mini"
+;;         aidermacs-default-model "openai/gpt-5.4"
+;;         aidermacs-auto-commits nil
+;;         aidermacs-show-diff-after-change t
+;;         ;; optional:
+;;         ;; aidermacs-default-chat-mode 'architect
+;;         ;; aidermacs-backend 'vterm
+;;         )
+
+;;   ;; --- Profiles ---
+;;   (defvar my/aider-args-propose
+;;     '("--dry-run" "--no-dirty-commits")
+;;     "Aider args for propose-only (no file writes, no commits).")
+
+;;   (defvar my/aider-args-apply
+;;     '("--no-dirty-commits")
+;;     "Aider args for apply mode (writes allowed, still no auto-commits).")
+
+;;   (defvar my/aider-args-apply-clipboard
+;;     '("--apply-clipboard-edits" "--no-dirty-commits")
+;;     "Aider args to apply a diff from the clipboard/kill-ring.")
+
+;;   (defvar my/aider-args-architect
+;;     '("--dry-run" "--architect" "--editor-edit-format=editor-diff" "--no-dirty-commits")
+;;     "Aider args for architect (suggest-only) mode.")
+
+;;   (defvar my/aider-last-args my/aider-args-propose)
+
+;;   ;; --- Launchers ---
+;;   (defvar my/aider-model nil)
+;;   (setq my/aider-model "openai/gpt-5.4")
+
+;;   ;; (defun my/aider--start (args)
+;;   ;;   (setq my/aider-last-args args)
+;;   ;;   (let ((aidermacs-extra-args args))
+;;   ;;     (aidermacs-run)))
+
+;;   (defun my/aider--start (args)
+;;     (setq my/aider-last-args args)
+;;     (let ((aidermacs-extra-args
+;;            (append (list "--model" my/aider-model) args)))
+;;       (aidermacs-run)))
+
+;;   (defun my/aider-propose ()            (interactive) (my/aider--start my/aider-args-propose))
+;;   (defun my/aider-apply ()              (interactive) (my/aider--start my/aider-args-apply))
+;;   (defun my/aider-apply-clipboard ()    (interactive) (my/aider--start my/aider-args-apply-clipboard))
+;;   (defun my/aider-architect ()          (interactive) (my/aider--start my/aider-args-architect))
+
+;;   ;; Quick “toggle”: restart the last session profile but flip dry-run on/off.
+;;   ;; (defvar my/aider-last-args my/aider-args-propose)
+;;   (defun my/aider--remember (fn args) (setq my/aider-last-args args) (funcall fn))
+;;   (advice-add 'my/aider-propose         :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-propose)))
+;;   (advice-add 'my/aider-apply           :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-apply)))
+;;   (advice-add 'my/aider-apply-clipboard :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-apply-clipboard)))
+;;   (advice-add 'my/aider-architect       :around (lambda (fn &rest _) (my/aider--remember fn my/aider-args-architect)))
+
+;;   (defun my/aider-toggle-dry-run ()
+;;     "Restart Aider with the last args but toggled dry-run."
+;;     (interactive)
+;;     (let* ((args my/aider-last-args)
+;;            (has-dry (member "--dry-run" args))
+;;            (toggled (if has-dry (remove "--dry-run" args) (append args '("--dry-run")))))
+;;       (my/aider--start toggled)
+;;       (setq my/aider-last-args toggled)))
+
+;;   ;; Handy helpers
+;;   (defun my/aider-diff-last () (interactive) (call-interactively #'aidermacs-diff-last))
+;;   (defun my/aider-rewrite-region () (interactive) (call-interactively #'aidermacs-rewrite-region))
+
+;;   ;; --- Transient menu (SPC j A) ---
+;;   (transient-define-prefix my/aider-transient ()
+;;     "Aider control panel"
+;;     [["Sessions"
+;;       ("p" "Propose (dry-run)"           my/aider-propose)
+;;       ("w" "Write (apply, no commits)"   my/aider-apply)
+;;       ("c" "Apply clipboard diff"        my/aider-apply-clipboard)
+;;       ("r" "Architect (suggest-only)"    my/aider-architect)]
+;;      ["Actions"
+;;       ("d" "Show last diff"              my/aider-diff-last)
+;;       ("e" "Rewrite region"              my/aider-rewrite-region)
+;;       ("t" "Toggle dry-run & restart"    my/aider-toggle-dry-run)]])
+
+;;   :config
+;;   ;; You can define additional settings here if required by the aidermacs package
+;;   (setq aidermacs-history-max-length 50)
+;;   :general
+;;   ;; Place both aidermacs and gptel keybindings under the SPACE-j prefix
+;;   (:keymaps 'aidermacs-mode-map
+;;             :states '(normal insert visual motion)
+;;             "C-<return>" 'aidermacs-send-line-or-region)  ;; Send input with Ctrl+Enter
+
+;;   ;; Define SPACE-j bindings for both aidermacs and gptel
+;;   (tyrant-def
+;;     "ja" '(aidermacs-transient-menu :which-key "Start Aider Menu")
+;;     "jj" 'my/aider-propose          ;; default = propose-only (Codex-like)
+;;     "jw" 'my/aider-apply            ;; allow writes, still no auto-commit
+;;     "jc" 'my/aider-apply-clipboard  ;; apply exactly what's in clipboard
+;;     "jt" 'my/aider-toggle-dry-run   ;; fast flip
+;;     "jd" 'my/aider-diff-last
+;;     "je" 'my/aider-rewrite-region
+;;     "jA" 'my/aider-transient
+;;     ))
+
+;; (defun my/aidermacs-use (model)
+;;   "Switch aidermacs model for this session."
+;;   (interactive "sModel: ")
+;;   (setq aidermacs-default-model model)
+;;   (message "aidermacs-default-model → %s" model))
+
+;; (use-package model-switcher
+;;   :straight nil
+;;   :load-path "lisp"
+;;   :commands (my/aidermacs-choose-model my/openai-refresh-models)
+;;   :after (aidermacs general)
+;;   :init
+;;   ;; (setq my/openai-base-url "https://api.openai.com/v1") ;; change if needed
+;;   :config
+;;   ;; If you *didn’t* keep the keybindings inside model-switcher.el,
+;;   ;; you can put them here instead:
+;;   ;; (when (fboundp 'tyrant-def)
+;;   ;;   (tyrant-def
+;;   ;;     "jm" '(my/aidermacs-choose-model :which-key "Choose Aider model")
+;;   ;;     "jM" '(my/openai-refresh-models :which-key "Refresh models")))
+;;   )
 
 ;; ==============================
 ;; agent-shell (Codex via ACP)
@@ -2018,13 +2086,18 @@ Also wire env + path mapping for container runs."
   :after (acp shell-maker)
   :commands (agent-shell agent-shell-openai-start-codex)
   :config
-  ;; API key auth
+  ;; ;; API key auth
+  ;; (setq agent-shell-openai-authentication
+  ;;       (agent-shell-openai-make-authentication
+  ;;        :api-key #'my/openai-api-key-from-auth-source))
   (setq agent-shell-openai-authentication
-        (agent-shell-openai-make-authentication
-         :api-key #'my/openai-api-key-from-auth-source))
+      (agent-shell-openai-make-authentication :login t))
   ;; Gemini auth (login-based is the documented default)
   (setq agent-shell-google-authentication
         (agent-shell-google-make-authentication :login t))
+  ;; Anthropic
+  (setq agent-shell-anthropic-authentication
+      (agent-shell-anthropic-make-authentication :login t))
 
   ;; Inherit env so PATH includes codex-acp / your wrapper scripts
   (setq agent-shell-openai-codex-environment
@@ -2032,6 +2105,8 @@ Also wire env + path mapping for container runs."
   (setq agent-shell-google-gemini-environment
         (agent-shell-make-environment-variables :inherit-env t))
   (setq agent-shell-github-environment
+        (agent-shell-make-environment-variables :inherit-env t))
+  (setq agent-shell-anthropic-environment
         (agent-shell-make-environment-variables :inherit-env t))
 
   (setq agent-shell-google-gemini-acp-command

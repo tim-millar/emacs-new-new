@@ -391,6 +391,40 @@
   :config
   (global-evil-surround-mode 1))
 
+;; Visual undo tree
+;; ==============================
+
+(use-package vundo
+  :straight (:host github :repo "casouri/vundo")
+  :commands (vundo)
+  :init
+  ;; Optional, but makes the graph a bit more readable.
+  ;; Requires a font that can display these glyphs; Fira Code should be fine.
+  (setq vundo-glyph-alist vundo-unicode-symbols)
+
+  :config
+  ;; Evil users usually want vundo buffers to behave like special transient UI.
+  (when (bound-and-true-p evil-mode)
+    (evil-set-initial-state 'vundo-mode 'normal))
+
+  ;; Movement inside the vundo graph.
+  ;; These are deliberately local to `vundo-mode', so they do not affect
+  ;; Vertico, Consult, Corfu, or your normal Evil bindings.
+  (general-define-key
+   :keymaps 'vundo-mode-map
+   :states '(normal motion emacs)
+   "h" #'vundo-backward
+   "j" #'vundo-next
+   "k" #'vundo-previous
+   "l" #'vundo-forward
+   "q" #'vundo-quit
+   "RET" #'vundo-confirm
+   "C-g" #'vundo-quit)
+
+  ;; Leader key entry point.
+  (tyrant-def
+    "bu" '(vundo :which-key "vundo")))
+
 ;; ==============================
 ;; vertico, consult etc
 ;; ==============================
@@ -863,7 +897,7 @@ parses its input."
 ;; ==============================
 
 (use-package eww
-  :ensure nil ; emacs built-in
+  :straight nil
   :defer t
   :config
   (setq
@@ -1759,7 +1793,7 @@ Also wire env + path mapping for container runs."
           (when entry
             (let ((api-key (plist-get entry :key)))
               (when (stringp api-key) api-key)))))
-  (setq gptel-default-model "gpt-5.4-mini"
+  (setq gptel-default-model "gpt-5-mini"
         gptel-temperature 0.7)
 
   ;; (require 'gptel-openai-extras) ; bundled with gptel
@@ -1771,6 +1805,7 @@ Also wire env + path mapping for container runs."
   ;;                     (verbosity . "low")))
   ;; (setq gptel-backend (gptel-backend "OpenAI+")
   ;;       gptel-model "gpt-5")
+
   :config
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"

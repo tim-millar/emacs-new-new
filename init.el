@@ -24,7 +24,13 @@
 (global-hl-line-mode t)
 (winner-mode t)
 
-(set-face-attribute 'default nil :font "Fira Code-14")
+;; Disabled while experimenting with nano
+;; (set-face-attribute 'default nil :font "Fira Code-14")
+
+(set-face-attribute 'default nil
+                    :family "Roboto Mono"
+                    :height 140
+                    :weight 'light)
 
 (setq column-number-mode t
       sentence-end-double-space nil
@@ -238,21 +244,72 @@
 ;; Themes and appearance
 ;; ==============================
 
-;;;; Theme switching (doom-nord <-> doom-nord-light) + consistent tweaks
+;;;; NANO experiment layer
+;;;; Visual-only: no keybindings, no completion behaviour changes.
 
-(defvar my/theme-dark 'doom-nord)
-(defvar my/theme-light 'doom-nord-light)
+(defvar my/theme-dark-theme 'nano-dark)
+(defvar my/theme-light-theme 'nano-light)
+
+(defvar my/theme-default-gui 'dark
+  "Default theme for graphical Emacs frames.")
+
+(defvar my/theme-default-terminal 'light
+  "Default theme for terminal Emacs frames.")
+
+(defun my/theme-current-default ()
+  "Return the preferred default theme style for the current frame."
+  (if (display-graphic-p)
+      my/theme-default-gui
+    my/theme-default-terminal))
+
+(defun my/apply-ui-basics ()
+  "Small modern UI defaults that do not change editing behaviour."
+  ;; Frame chrome
+  (setq inhibit-startup-screen t
+        use-dialog-box nil
+        use-file-dialog nil
+        visible-bell nil
+        ring-bell-function #'ignore)
+
+  ;; Cleaner visual surface
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+  (scroll-bar-mode -1)
+  (blink-cursor-mode -1)
+
+  ;; Comfortable spacing. Adjust to taste.
+  (setq-default line-spacing 0.12)
+
+  ;; Fringes help the NANO look breathe a bit.
+  (when (display-graphic-p)
+    (set-fringe-mode 10))
+
+  ;; Pixel scrolling, purely visual/navigation polish.
+  (when (fboundp 'pixel-scroll-precision-mode)
+    (pixel-scroll-precision-mode 1)))
 
 (defun my/apply-theme-tweaks ()
-  "Face tweaks that should persist across theme switches."
-  ;; Comments (brighter)
-  (set-face-attribute 'font-lock-comment-face nil :foreground "#9CAEC5")
-  (set-face-attribute 'font-lock-comment-delimiter-face nil :foreground "#9CAEC5")
+  "Face tweaks that should persist across NANO theme switches."
 
-  ;; De-emphasized text (general)
-  (set-face-attribute 'shadow nil :foreground "#8C9BAA")
+  ;; Comments: a bit brighter than stock dark-mode comments.
+  ;; These colours are Nord-ish and still work acceptably in nano-dark.
+  ;; For nano-light, we override them below.
+  (if (member my/theme-light-theme custom-enabled-themes)
+      (progn
+        (set-face-attribute 'font-lock-comment-face nil
+                            :foreground "#78909C")
+        (set-face-attribute 'font-lock-comment-delimiter-face nil
+                            :foreground "#78909C")
+        (set-face-attribute 'shadow nil
+                            :foreground "#90A4AE"))
+    (set-face-attribute 'font-lock-comment-face nil
+                        :foreground "#9CAEC5")
+    (set-face-attribute 'font-lock-comment-delimiter-face nil
+                        :foreground "#9CAEC5")
+    (set-face-attribute 'shadow nil
+                        :foreground "#8C9BAA"))
 
-  ;; Consult metadata (guarded: some faces vary by version)
+  ;; Consult metadata.
   (when (facep 'consult-annotation)
     (set-face-attribute 'consult-annotation nil :foreground "#88C0D0"))
   (when (facep 'consult-line-number)
@@ -260,59 +317,201 @@
   (when (facep 'consult-file)
     (set-face-attribute 'consult-file nil :foreground "#81A1C1"))
 
-  ;; Marginalia
+  ;; Marginalia.
   (when (facep 'marginalia-documentation)
     (set-face-attribute 'marginalia-documentation nil :foreground "#8FBCBB"))
 
-  ;; Vertico group headings in minibuffer (this is your consult-ripgrep "file headings")
+  ;; Vertico group headings in minibuffer.
   (when (facep 'vertico-group-title)
     (set-face-attribute 'vertico-group-title nil
                         :foreground "#81A1C1"
                         :weight 'semi-bold
                         :slant 'italic))
   (when (facep 'vertico-group-separator)
-    (set-face-attribute 'vertico-group-separator nil :foreground "#5E81AC")))
+    (set-face-attribute 'vertico-group-separator nil
+                        :foreground "#5E81AC")))
 
 (defun my/load-theme-clean (theme)
-  "Disable current themes, load THEME, then reapply my tweaks."
+  "Disable current themes, load THEME, then reapply visual tweaks."
   (mapc #'disable-theme custom-enabled-themes)
   (load-theme theme t)
   (my/apply-theme-tweaks))
 
 (defun my/theme-dark ()
+  "Switch to NANO dark."
   (interactive)
-  (my/load-theme-clean my/theme-dark))
+  (my/load-theme-clean my/theme-dark-theme))
 
 (defun my/theme-light ()
+  "Switch to NANO light."
   (interactive)
-  (my/load-theme-clean my/theme-light))
+  (my/load-theme-clean my/theme-light-theme))
+
+(defun my/theme-default ()
+  "Load dark in GUI Emacs, light in terminal Emacs."
+  (interactive)
+  (pcase (my/theme-current-default)
+    ('light (my/theme-light))
+    (_      (my/theme-dark))))
 
 (defun my/toggle-theme ()
+  "Toggle between NANO dark and NANO light."
   (interactive)
-  (if (member my/theme-dark custom-enabled-themes)
+  (if (member my/theme-dark-theme custom-enabled-themes)
       (my/theme-light)
     (my/theme-dark)))
 
 (defun my/reapply-theme-tweaks ()
+  "Reapply custom face tweaks."
   (interactive)
   (my/apply-theme-tweaks))
 
-;; Optional: convenient key
+;; Optional: convenient key.
 ;; (global-set-key (kbd "<f6>") #'my/toggle-theme)
 
-(use-package doom-themes
-  :config
-  (doom-themes-visual-bell-config)
-  (doom-themes-org-config)
-  (my/theme-dark))
 
-(use-package doom-modeline
-  :defer t
+;;;; NANO theme
+
+(use-package nano-theme
+  :straight (:type git :host github :repo "rougier/nano-theme")
   :init
-  (doom-modeline-mode 1)
+  (my/apply-ui-basics)
   :config
-  (setq doom-modeline-height 30)
-  (setq doom-modeline-buffer-file-name-style 'relative-to-project))
+  ;; Load GUI dark / terminal light by default.
+  (my/theme-default)
+
+  ;; Optional: this applies more of the official NANO visual style.
+  ;; It may be slightly more opinionated than just loading the theme.
+  ;; Enable after trying the basic theme first.
+  ;;
+  ;; (when (fboundp 'nano-mode)
+  ;;   (nano-mode))
+  )
+
+
+;;;; NANO modeline
+;;;; Replace doom-modeline while experimenting.
+
+(use-package nano-modeline
+  :straight (:type git :host github :repo "rougier/nano-modeline")
+  :after nano-theme
+  :config
+  (when (bound-and-true-p doom-modeline-mode)
+    (doom-modeline-mode -1))
+
+  (setq nano-modeline-position #'nano-modeline-footer)
+
+  (add-hook 'prog-mode-hook #'nano-modeline-prog-mode)
+  (add-hook 'text-mode-hook #'nano-modeline-text-mode)
+  (add-hook 'org-mode-hook  #'nano-modeline-org-mode)
+
+  (nano-modeline-text-mode t))
+
+
+;;;; NANO Vertico adapter
+;;;; Purely visual; keeps your Vertico/Consult setup intact.
+
+(use-package nano-vertico
+  :straight (:type git :host github :repo "rougier/nano-vertico")
+  :after vertico
+  :config
+  ;; nano-vertico's default glyphs may expect a Nerd Font.
+  ;; Enable first; if glyphs look wrong in your font, customise
+  ;; `nano-vertico-symbols`.
+  (nano-vertico-mode 1))
+
+;; Shell heredocs: avoid loud string/heredoc highlighting.
+(with-eval-after-load 'sh-script
+  (when (facep 'sh-heredoc)
+    (set-face-attribute 'sh-heredoc nil
+                        :foreground "#D8DEE9"
+                        :background 'unspecified
+                        :weight 'normal))
+  (when (facep 'sh-quoted-exec)
+    (set-face-attribute 'sh-quoted-exec nil
+                        :foreground "#EBCB8B"
+                        :background 'unspecified
+                        :weight 'normal)))
+
+;; ==============================
+;; Themes and appearance OLD
+;; ==============================
+
+;;;; Theme switching (doom-nord <-> doom-nord-light) + consistent tweaks
+
+;; (defvar my/theme-dark 'doom-nord)
+;; (defvar my/theme-light 'doom-nord-light)
+
+;; (defun my/apply-theme-tweaks ()
+;;   "Face tweaks that should persist across theme switches."
+;;   ;; Comments (brighter)
+;;   (set-face-attribute 'font-lock-comment-face nil :foreground "#9CAEC5")
+;;   (set-face-attribute 'font-lock-comment-delimiter-face nil :foreground "#9CAEC5")
+
+;;   ;; De-emphasized text (general)
+;;   (set-face-attribute 'shadow nil :foreground "#8C9BAA")
+
+;;   ;; Consult metadata (guarded: some faces vary by version)
+;;   (when (facep 'consult-annotation)
+;;     (set-face-attribute 'consult-annotation nil :foreground "#88C0D0"))
+;;   (when (facep 'consult-line-number)
+;;     (set-face-attribute 'consult-line-number nil :foreground "#616E88"))
+;;   (when (facep 'consult-file)
+;;     (set-face-attribute 'consult-file nil :foreground "#81A1C1"))
+
+;;   ;; Marginalia
+;;   (when (facep 'marginalia-documentation)
+;;     (set-face-attribute 'marginalia-documentation nil :foreground "#8FBCBB"))
+
+;;   ;; Vertico group headings in minibuffer (this is your consult-ripgrep "file headings")
+;;   (when (facep 'vertico-group-title)
+;;     (set-face-attribute 'vertico-group-title nil
+;;                         :foreground "#81A1C1"
+;;                         :weight 'semi-bold
+;;                         :slant 'italic))
+;;   (when (facep 'vertico-group-separator)
+;;     (set-face-attribute 'vertico-group-separator nil :foreground "#5E81AC")))
+
+;; (defun my/load-theme-clean (theme)
+;;   "Disable current themes, load THEME, then reapply my tweaks."
+;;   (mapc #'disable-theme custom-enabled-themes)
+;;   (load-theme theme t)
+;;   (my/apply-theme-tweaks))
+
+;; (defun my/theme-dark ()
+;;   (interactive)
+;;   (my/load-theme-clean my/theme-dark))
+
+;; (defun my/theme-light ()
+;;   (interactive)
+;;   (my/load-theme-clean my/theme-light))
+
+;; (defun my/toggle-theme ()
+;;   (interactive)
+;;   (if (member my/theme-dark custom-enabled-themes)
+;;       (my/theme-light)
+;;     (my/theme-dark)))
+
+;; (defun my/reapply-theme-tweaks ()
+;;   (interactive)
+;;   (my/apply-theme-tweaks))
+
+;; ;; Optional: convenient key
+;; ;; (global-set-key (kbd "<f6>") #'my/toggle-theme)
+
+;; (use-package doom-themes
+;;   :config
+;;   (doom-themes-visual-bell-config)
+;;   (doom-themes-org-config)
+;;   (my/theme-dark))
+
+;; (use-package doom-modeline
+;;   :defer t
+;;   :init
+;;   (doom-modeline-mode 1)
+;;   :config
+;;   (setq doom-modeline-height 30)
+;;   (setq doom-modeline-buffer-file-name-style 'relative-to-project))
 
 (use-package all-the-icons
   :init
@@ -323,11 +522,13 @@
   :config
   (add-hook 'dired-mode-hook 'all-the-icons-dired-mode))
 
-(use-package all-the-icons-completion
-  :after (all-the-icons marginalia)
-  :config
-  (add-hook 'marginalia-mode-hook #'all-the-icons-completion-marginalia-setup)
-  (all-the-icons-completion-mode))
+;; Temporarily disable while testing nano-vertico alignment.
+;;
+;; (use-package all-the-icons-completion
+;;   :after (all-the-icons marginalia)
+;;   :config
+;;   (add-hook 'marginalia-mode-hook #'all-the-icons-completion-marginalia-setup)
+;;   (all-the-icons-completion-mode))
 
 (use-package which-key
   :diminish which-key-mode
@@ -1730,7 +1931,7 @@ Also wire env + path mapping for container runs."
 (with-eval-after-load 'citre
   ;; Core nav
   (define-key goto-map (kbd "g") #'xref-find-definitions) ; SPC g g -> goto def (Citre via Xref)
-  (define-key goto-map (kbd "g") #'xref-go-back) ; SPC g g -> goto def (Citre via Xref)
+  (define-key goto-map (kbd "G") #'xref-go-back) ; SPC g G -> goto def (Citr via Xref)
   (define-key goto-map (kbd "b") #'citre-jump-back)       ; SPC g b -> jump back
   (define-key goto-map (kbd "r") #'xref-find-references)  ; SPC g r -> references
   (define-key goto-map (kbd "P") #'citre-peek)            ; SPC g P -> peek def
@@ -1779,7 +1980,8 @@ Also wire env + path mapping for container runs."
         whisper-recording-timeout 300
         whisper-quantize nil
         whisper--ffmpeg-input-format "avfoundation"
-        whisper--ffmpeg-input-device ":0"))
+        whisper--ffmpeg-extra-args "-af dynaudnorm"
+        whisper--ffmpeg-input-device ":MacBook Pro Microphone"))
 
 ;; ==============================
 ;; Software Development / LLMs and Gen AI
@@ -1971,10 +2173,6 @@ Also wire env + path mapping for container runs."
 
   (setq agent-shell-google-gemini-acp-command
         '("gemini" "--experimental-acp" "--model" "auto"))
-
-  ;; Keep agent selection focused
-  ;; (setq agent-shell-preferred-agent-config
-  ;;       (agent-shell-openai-make-codex-config))
 
   ;; Ctrl+Enter submits (shell-maker)
   (define-key agent-shell-mode-map (kbd "C-<return>") #'shell-maker-submit)

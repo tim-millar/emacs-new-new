@@ -321,6 +321,29 @@
   (when (facep 'marginalia-documentation)
     (set-face-attribute 'marginalia-documentation nil :foreground "#8FBCBB"))
 
+  ;; Marginalia metadata: readable, but secondary.
+  ;; (dolist (face '(marginalia-file-owner
+  ;;                 marginalia-file-modes
+  ;;                 marginalia-file-size
+  ;;                 marginalia-date
+  ;;                 marginalia-type
+  ;;                 marginalia-mode))
+  ;;   (when (facep face)
+  ;;     (set-face-attribute face nil
+  ;;                         :foreground "#6F7F99"
+  ;;                         :weight 'normal)))
+
+  ;; (when (facep 'marginalia-documentation)
+  ;;   (set-face-attribute 'marginalia-documentation nil
+  ;;                       :foreground "#8FBCBB"
+  ;;                       :weight 'normal
+  ;;                       :slant 'normal))
+
+  ;; (when (facep 'marginalia-file-name)
+  ;;   (set-face-attribute 'marginalia-file-name nil
+  ;;                       :foreground "#81A1C1"
+  ;;                       :weight 'normal))
+
   ;; Vertico group headings in minibuffer.
   (when (facep 'vertico-group-title)
     (set-face-attribute 'vertico-group-title nil
@@ -578,8 +601,7 @@
   :config
   (evil-collection-init)
   (with-eval-after-load 'compilation
-    (evil-define-key 'normal compilation-mode-map "q" 'quit-window))
-  )
+    (evil-define-key 'normal compilation-mode-map "q" 'quit-window)))
 
 (use-package evil-nerd-commenter
   :commands (evilnc-comment-operator)
@@ -945,16 +967,15 @@ parses its input."
   ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
   ;; available in the *Completions* buffer, add it to the
   ;; `completion-list-mode-map'.
-  :bind (:map minibuffer-local-map
-   ("M-A" . marginalia-cycle))
-
-  ;; The :init section is always executed.
+  :bind
+  (:map minibuffer-local-map
+        ("M-A" . marginalia-cycle))
   :init
-
-  ;; Marginalia must be activated in the :init section of use-package such that
-  ;; the mode gets enabled right away. Note that this forces loading the
-  ;; package.
-  (marginalia-mode))
+  (marginalia-mode)
+  :custom
+  (marginalia-align 'right)
+  (marginalia-separator " ")
+  (marginalia-align-offset 0))
 
 ;; Consult users will also want the embark-consult package.
 (use-package embark-consult

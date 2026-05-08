@@ -2032,6 +2032,13 @@ Also wire env + path mapping for container runs."
     "jm" '(gptel-menu :which-key "GPT Menu"))
   )
 
+;; gptel-agent
+(use-package gptel-agent
+  :straight (:host github :repo "karthink/gptel-agent")
+  :after gptel
+  :config
+  (gptel-agent-update))
+
 ;; Org AI integration with Org-mode
 (use-package org-ai
   :straight (:host github :repo "rksm/org-ai"

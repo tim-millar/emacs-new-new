@@ -3199,6 +3199,16 @@ or directly if not."
     (user-error "Not in a project or no file")))
 
 ;; ==============================
+;; Utils
+;; ==============================
+
+(use-package pdf-tools
+  :straight t
+  :config
+  (pdf-tools-install)
+  (setq-default pdf-view-display-size 'fit-page))
+
+;; ==============================
 ;; Emacs Auto-gen
 ;; ==============================
 

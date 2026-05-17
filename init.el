@@ -288,6 +288,80 @@
   (when (fboundp 'pixel-scroll-precision-mode)
     (pixel-scroll-precision-mode 1)))
 
+(defun my/apply-nano-legibility-fixes ()
+  "Improve legibility for faces that are too dim in nano-dark."
+
+  ;; General syntax faces that show up in many modes.
+  (set-face-attribute 'font-lock-variable-name-face nil
+                      :foreground "#D8DEE9"
+                      :weight 'normal)
+
+  (set-face-attribute 'font-lock-variable-use-face nil
+                      :foreground "#D8DEE9"
+                      :weight 'normal)
+
+  (set-face-attribute 'font-lock-string-face nil
+                      :foreground "#A3BE8C"
+                      :weight 'normal)
+
+  (set-face-attribute 'font-lock-constant-face nil
+                      :foreground "#81A1C1"
+                      :weight 'normal)
+
+  (set-face-attribute 'font-lock-builtin-face nil
+                      :foreground "#88C0D0"
+                      :weight 'normal)
+
+  (set-face-attribute 'font-lock-property-name-face nil
+                      :foreground "#D8DEE9"
+                      :weight 'normal)
+
+  (set-face-attribute 'font-lock-property-use-face nil
+                      :foreground "#D8DEE9"
+                      :weight 'normal)
+
+  ;; Shell-script specific faces.
+  (with-eval-after-load 'sh-script
+    (dolist (face '(sh-heredoc
+                    sh-quoted-exec
+                    sh-variable
+                    sh-escaped-newline))
+      (when (facep face)
+        (set-face-attribute face nil
+                            :foreground "#D8DEE9"
+                            :background 'unspecified
+                            :weight 'normal))))
+
+  ;; YAML mode faces. Some depend on which YAML mode/tree-sitter mode is active.
+  (dolist (face '(yaml-tab-face
+                  yaml-ts-mode-error-face
+                  yaml-mode-line-face
+                  yaml-font-lock-key-face
+                  yaml-font-lock-value-face
+                  yaml-font-lock-string-face
+                  yaml-font-lock-number-face
+                  yaml-font-lock-constant-face))
+    (when (facep face)
+      (set-face-attribute face nil
+                          :foreground "#D8DEE9"
+                          :background 'unspecified
+                          :weight 'normal)))
+
+  ;; Prefer more visible YAML keys if the face exists.
+  (when (facep 'yaml-font-lock-key-face)
+    (set-face-attribute 'yaml-font-lock-key-face nil
+                        :foreground "#88C0D0"
+                        :weight 'normal))
+
+  ;; Tree-sitter tends to use these in newer Emacs modes.
+  (dolist (face '(font-lock-property-name-face
+                  font-lock-variable-name-face
+                  font-lock-variable-use-face))
+    (when (facep face)
+      (set-face-attribute face nil
+                          :foreground "#D8DEE9"
+                          :weight 'normal))))
+
 (defun my/apply-theme-tweaks ()
   "Face tweaks that should persist across NANO theme switches."
 
@@ -352,7 +426,8 @@
                         :slant 'italic))
   (when (facep 'vertico-group-separator)
     (set-face-attribute 'vertico-group-separator nil
-                        :foreground "#5E81AC")))
+                        :foreground "#5E81AC"))
+  (my/apply-nano-legibility-fixes))
 
 (defun my/load-theme-clean (theme)
   "Disable current themes, load THEME, then reapply visual tweaks."
@@ -1760,6 +1835,7 @@ Also wire env + path mapping for container runs."
         ;; TSX files:
         ;; Emacs 30 uses tsx-ts-mode; make sure .tsx goes there:
         ;; (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+        (python-mode      . python-ts-mode)
         (json-mode        . json-ts-mode)
         (css-mode         . css-ts-mode)
         (yaml-mode        . yaml-ts-mode)

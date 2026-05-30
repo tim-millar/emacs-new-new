@@ -3282,7 +3282,16 @@ or directly if not."
   :straight t
   :config
   (pdf-tools-install)
-  (setq-default pdf-view-display-size 'fit-page))
+  (setq-default pdf-view-display-size 'fit-page)
+  (save-place-mode 1)
+  (setq pdf-view-use-scaling t)
+  (setq pdf-view-use-imagemagick nil))
+
+(defun open-in-preview ()
+  (interactive)
+  (shell-command
+   (format "open -a Preview %s"
+           (shell-quote-argument buffer-file-name))))
 
 ;; ==============================
 ;; Emacs Auto-gen

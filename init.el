@@ -1482,6 +1482,18 @@ multiple eshell windows easier."
 (use-package writeroom-mode
   :defer t)
 
+(use-package olivetti
+  :straight t
+  :commands (olivetti-mode)
+  :custom
+  (olivetti-body-width 110))
+
+(tyrant-def
+  "z"  '(:ignore t :which-key "zen/focus")
+  "zz" '(olivetti-mode :which-key "olivetti")
+  "zw" '(writeroom-mode :which-key "writeroom")
+  "zv" '(visual-fill-column-mode :which-key "visual-fill-column"))
+
 ;; ==============================
 ;; Software Development / Programming General
 ;; ==============================

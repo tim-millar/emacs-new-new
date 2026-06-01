@@ -1037,6 +1037,13 @@ parses its input."
     (when word
       (insert word))))
 
+(use-package consult-project-extra
+  :straight (:host github :repo "Qkessler/consult-project-extra")
+  :after (consult project)
+  :general
+  (tm/leader-keys
+    "p f" '(consult-project-extra-find :wk "project file/buffer")))
+
 ;; Enable rich annotations using the Marginalia package
 (use-package marginalia
   ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
